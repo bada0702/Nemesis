@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 *)",
+      "PowerShell(Get-Command *)",
+      "PowerShell(Start-Sleep -Seconds 2; cmd /c \"D:\\\\Nemesis_v100\\\\start.bat start\" 2>&1)",
+      "Bash(./gradlew compileJava)",
+      "Bash(docker --version)",
+      "Bash(docker compose *)",
+      "Bash(sudo apt-get update -qq)",
+      "Bash(sudo apt-get install -y ca-certificates curl gnupg lsb-release)",
+      "Bash(sudo sed -i 's|deb cdrom:|# deb cdrom:|g' /etc/apt/sources.list)",
+      "Bash(sudo sed -i 's|deb cdrom:|# deb cdrom:|g' /etc/apt/sources.list.d/*.list)",
+      "Read(//etc/apt/sources.list.d/**)",
+      "Bash(sudo apt-get install -y docker.io docker-compose)",
+      "Bash(ls frontend/Dockerfile nginx/)",
+      "Bash(cat .env)",
+      "Bash(docker rm *)",
+      "Bash(docker-compose up *)",
+      "Bash(curl -s http://localhost:18080/api/db)",
+      "Bash(curl -s --max-time 30 http://localhost:18080/api/docker/containers)",
+      "Bash(curl -s --max-time 30 http://localhost:18080/api/docker/images)"
+    ]
+  }
+}

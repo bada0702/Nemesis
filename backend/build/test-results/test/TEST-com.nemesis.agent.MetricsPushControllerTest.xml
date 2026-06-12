@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.nemesis.agent.MetricsPushControllerTest" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-06-12T03:41:21" hostname="f57b58bc0707" time="0.325">
+  <properties/>
+  <testcase name="유효한_키로_메트릭_Push_성공()" classname="com.nemesis.agent.MetricsPushControllerTest" time="0.153"/>
+  <testcase name="Authorization_헤더_없으면_401()" classname="com.nemesis.agent.MetricsPushControllerTest" time="0.16"/>
+  <system-out><![CDATA[2026-06-12T03:41:21.604Z  INFO 158 --- [    Test worker] t.c.s.AnnotationConfigContextLoaderUtils : Could not detect default configuration classes for test class [com.nemesis.agent.MetricsPushControllerTest]: MetricsPushControllerTest does not declare any static, non-private, non-final, nested classes annotated with @Configuration.
+2026-06-12T03:41:21.609Z  INFO 158 --- [    Test worker] .b.t.c.SpringBootTestContextBootstrapper : Found @SpringBootConfiguration com.nemesis.NemesisServerApplication for test class com.nemesis.agent.MetricsPushControllerTest
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

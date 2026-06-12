@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  nemesis-server:
+    image: nemesis-server:latest
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "${NEMESIS_API_PORT:-18080}:18080"
+      # 17001은 에이전트 수신 포트(서버는 아웃바운드만 사용) — 서버 매핑은 잘못된 설계라 제거.
+      # 매핑 시 docker-proxy가 호스트 17001을 점유해 같은 호스트의 에이전트가 바인드 불가.
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - .env
+    networks:
+      - nemesis-net
+
+  nemesis-frontend:
+    image: nginx:alpine
+    ports:
+      - "${NEMESIS_UI_PORT:-18090}:80"
+    volumes:
+      - ./frontend/dist:/usr/share/nginx/html:ro
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - nemesis-server
+    networks:
+      - nemesis-net
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: ${DB_NAME:-nemesis}
+      POSTGRES_USER: ${DB_USER:-nemesis}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-changeme}
+    volumes:
+      - nemesis-data:/var/lib/postgresql/data
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-nemesis}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - nemesis-net
+
+volumes:
+  nemesis-data:
+
+networks:
+  nemesis-net:
+    driver: bridge

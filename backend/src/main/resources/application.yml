@@ -1,0 +1,75 @@
+server:
+  port: 18080
+
+spring:
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:nemesis}
+    username: ${DB_USER:nemesis}
+    password: ${DB_PASSWORD:changeme}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+nemesis:
+  max-cluster-groups: ${MAX_CLUSTER_GROUPS:10}
+  control-port: ${NEMESIS_CONTROL_PORT:17001}
+  security:
+    # 브라우저는 동일 출처 POST에도 Origin 헤더를 보내므로 배포 UI 출처를 반드시 포함해야 한다.
+    allowed-origins: ${NEMESIS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:3000,http://localhost:18090}
+  llm:
+    provider: ${LLM_PROVIDER:ollama}          # ollama | openai | anthropic
+    timeout-seconds: ${LLM_TIMEOUT:10}
+    chat-timeout-seconds: ${LLM_CHAT_TIMEOUT:90}
+    confidence-threshold: ${LLM_CONFIDENCE:0.7}
+    ollama:
+      base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
+      model: ${LLM_MODEL:gemma2:9b}
+      chat-model: ${LLM_CHAT_MODEL:}
+    openai:
+      api-key: ${OPENAI_API_KEY:}
+      model: ${OPENAI_MODEL:gpt-4o-mini}
+    anthropic:
+      api-key: ${ANTHROPIC_API_KEY:}
+      model: ${ANTHROPIC_MODEL:claude-haiku-4-5}
+  detection:
+    scan-interval-ms: ${DETECT_SCAN_INTERVAL_MS:1000}
+    push-interval-seconds: ${DETECT_PUSH_INTERVAL:3}
+    stale-grace-seconds: ${DETECT_STALE_GRACE:2}
+    metrics-fresh-seconds: ${DETECT_METRICS_FRESH:10}
+    cpu-threshold: ${DETECT_CPU_THRESHOLD:85}
+    mem-threshold: ${DETECT_MEM_THRESHOLD:85}
+    disk-threshold: ${DETECT_DISK_THRESHOLD:90}
+
+logging:
+  level:
+    com.nemesis: INFO
+
+---
+spring:
+  config:
+    activate:
+      on-profile: test
+  datasource:
+    url: jdbc:h2:mem:testdb;MODE=PostgreSQL;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+  flyway:
+    enabled: false
+
+nemesis:
+  detection:
+    enabled: false   # 통합 테스트에서는 백그라운드 감지 스케줄러를 끈다(결정성 보장)
+  security:
+    bootstrap-admin: false   # 테스트에서는 기본 admin 생성 비활성
