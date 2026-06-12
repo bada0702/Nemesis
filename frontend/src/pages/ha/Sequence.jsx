@@ -1,16 +1,18 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import {
   GitBranch, ChevronUp, ChevronDown, Plus, Trash2, Edit2,
-  RefreshCw, Save, Zap, Power, PowerOff, ArrowRightLeft, Clock,
+  RefreshCw, Save, Zap, Power, PowerOff, ArrowRightLeft, Clock, ClipboardList, Check, Play, SkipForward,
 } from 'lucide-react'
-import { getClusters, getHaSequences, updateHaSequences } from '../../api/client'
+import { getClusters, getHaSequences, updateHaSequences, getRunbook, createRunbook, updateRunbookStep } from '../../api/client'
+import { fmt } from '../../lib/utils'
 import ComingSoon from '../../components/ComingSoon'
 
 // ── 상수 ──────────────────────────────────────────────────────
 const TABS = [
-  { key: 'STARTUP',  label: '기동 절차',       icon: Power,           color: 'text-green-400' },
-  { key: 'SHUTDOWN', label: '중지 절차',       icon: PowerOff,        color: 'text-red-400'   },
-  { key: 'FAILOVER', label: 'Failover 절차',   icon: ArrowRightLeft,  color: 'text-purple-400'},
+  { key: 'STARTUP',  label: '기동 절차',     icon: Power,         color: 'text-green-400'  },
+  { key: 'SHUTDOWN', label: '중지 절차',     icon: PowerOff,      color: 'text-red-400'    },
+  { key: 'FAILOVER', label: 'Failover 절차', icon: ArrowRightLeft, color: 'text-purple-400' },
+  { key: 'RUNBOOK',  label: '운영 Runbook',  icon: ClipboardList, color: 'text-orange-400' },
 ]
 
 const ACTION_META = {
@@ -216,6 +218,126 @@ function StepRow({ step, idx, total, isFirst, isLast, onMove, onEdit, onRemove }
           <button onClick={() => onEdit(idx)} className="p-1.5 text-gray-500 hover:text-white rounded-lg hover:bg-white/5">
             <Edit2 className="w-3.5 h-3.5" />
           </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── 탭: 운영 Runbook ──────────────────────────────────────────
+const TYPE_LABELS   = { MAINTENANCE: '정기점검', BACKUP: 'DB백업', FAILOVER: 'Failover', PATCH: '패치', OTHER: '기타' }
+const STATUS_COLORS = { COMPLETED: 'text-green-400', IN_PROGRESS: 'text-blue-400', SCHEDULED: 'text-yellow-400' }
+
+function RunbookTab() {
+  const [list,    setList]    = useState([])
+  const [active,  setActive]  = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [adding,  setAdding]  = useState(false)
+  const [form,    setForm]    = useState({ title: '', type: 'MAINTENANCE', target: '' })
+  const [saving,  setSaving]  = useState(false)
+
+  async function load() {
+    setLoading(true)
+    try { const r = await getRunbook(); setList(r.data ?? []) }
+    catch { /* ignore */ } finally { setLoading(false) }
+  }
+
+  useEffect(() => { load() }, [])
+
+  async function createNew(e) {
+    e.preventDefault()
+    setSaving(true)
+    try { await createRunbook(form); await load(); setAdding(false) }
+    finally { setSaving(false) }
+  }
+
+  async function advanceStep(runbookId, stepIndex) {
+    try { await updateRunbookStep(runbookId, stepIndex); await load() }
+    catch { /* ignore */ }
+  }
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center justify-between">
+        <p className="text-xs text-gray-500">운영 절차 실행 이력 및 단계별 진행 관리</p>
+        <button onClick={() => setAdding(true)}
+          className="flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg bg-blue-600/10 border border-blue-600/20 text-blue-400 hover:bg-blue-600/20">
+          <Plus className="w-3.5 h-3.5" /> 신규 작성
+        </button>
+      </div>
+
+      {adding && (
+        <div className="card-bg rounded-xl p-5">
+          <p className="text-sm font-bold text-white mb-4">새 Runbook</p>
+          <form onSubmit={createNew} className="space-y-3">
+            <input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
+              placeholder="제목 (예: 정기 점검 2026-06-12)"
+              className="w-full px-3 py-2 rounded-lg text-xs bg-gray-900 border border-gray-700 text-white outline-none" />
+            <div className="grid grid-cols-2 gap-3">
+              <select value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))}
+                className="px-3 py-2 rounded-lg text-xs bg-gray-900 border border-gray-700 text-white outline-none">
+                {Object.entries(TYPE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+              </select>
+              <input value={form.target} onChange={e => setForm(f => ({ ...f, target: e.target.value }))}
+                placeholder="대상 클러스터"
+                className="px-3 py-2 rounded-lg text-xs bg-gray-900 border border-gray-700 text-white outline-none" />
+            </div>
+            <div className="flex gap-2">
+              <button type="button" onClick={() => setAdding(false)}
+                className="flex-1 py-2 rounded-lg text-xs border border-gray-700 text-gray-400">취소</button>
+              <button type="submit" disabled={saving}
+                className="flex-1 py-2 rounded-lg text-xs bg-blue-600 text-white disabled:opacity-50">
+                {saving ? '생성 중...' : '생성'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {loading ? (
+        <div className="text-center py-16 text-gray-500">로딩 중...</div>
+      ) : list.length === 0 ? (
+        <div className="text-center py-16 text-gray-500">Runbook이 없습니다</div>
+      ) : (
+        <div className="space-y-3">
+          {list.map(rb => (
+            <div key={rb.id} className="card-bg rounded-xl overflow-hidden">
+              <button className="w-full flex items-center justify-between px-5 py-4 hover:bg-white/5 text-left"
+                onClick={() => setActive(active === rb.id ? null : rb.id)}>
+                <div className="flex items-center gap-3">
+                  <ClipboardList className="w-4 h-4 text-orange-400" />
+                  <div>
+                    <p className="text-sm font-bold text-white">{rb.title}</p>
+                    <p className="text-[10px] text-gray-500 mt-0.5">
+                      {TYPE_LABELS[rb.type] ?? rb.type} · {rb.target} · {fmt(rb.createdAt)}
+                    </p>
+                  </div>
+                </div>
+                <span className={`text-xs font-bold ${STATUS_COLORS[rb.status] ?? 'text-gray-400'}`}>
+                  {rb.status}
+                </span>
+              </button>
+
+              {active === rb.id && rb.steps && (
+                <div className="border-t border-gray-800 px-5 py-4 space-y-2">
+                  {rb.steps.map((step, i) => (
+                    <div key={i} className="flex items-center gap-3">
+                      <button onClick={() => advanceStep(rb.id, i)} disabled={step.done}
+                        className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 transition-all
+                          ${step.done   ? 'bg-green-500' : step.active ? 'bg-blue-600 animate-pulse' : 'bg-gray-700 hover:bg-gray-600'}`}>
+                        {step.done   && <Check    className="w-3 h-3 text-white" />}
+                        {step.active && <Play     className="w-3 h-3 text-white" />}
+                        {!step.done && !step.active && <SkipForward className="w-3 h-3 text-gray-500" />}
+                      </button>
+                      <span className={`text-xs ${step.done ? 'text-gray-500 line-through' : step.active ? 'text-white' : 'text-gray-400'}`}>
+                        {step.label}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
         </div>
       )}
     </div>
@@ -444,17 +566,22 @@ export default function HaSequence() {
         )}
       </div>
 
-      {/* 저장 버튼 */}
-      <div className="flex justify-between items-center">
-        <p className="text-xs text-gray-600">
-          변경사항은 저장 버튼을 눌러야 반영됩니다.
-        </p>
-        <button onClick={save} disabled={saving}
-          className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 disabled:opacity-50 transition-all">
-          <Save className="w-4 h-4" />
-          {saving ? '저장 중...' : saved ? '✓ 저장됨' : '절차 저장'}
-        </button>
-      </div>
+      {/* 저장 버튼 (Runbook 탭 제외) */}
+      {activeTab !== 'RUNBOOK' && (
+        <div className="flex justify-between items-center">
+          <p className="text-xs text-gray-600">
+            변경사항은 저장 버튼을 눌러야 반영됩니다.
+          </p>
+          <button onClick={save} disabled={saving}
+            className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 disabled:opacity-50 transition-all">
+            <Save className="w-4 h-4" />
+            {saving ? '저장 중...' : saved ? '✓ 저장됨' : '절차 저장'}
+          </button>
+        </div>
+      )}
+
+      {/* 탭 렌더링 */}
+      {activeTab === 'RUNBOOK' && <RunbookTab />}
     </div>
   )
 }
