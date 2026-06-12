@@ -29,8 +29,8 @@ export default function SyncStatusPanel({ agents = [], onRefresh }) {
     )
   }
 
-  const primary = agent.nodes?.find(n => n.role === 'active' || n.role === 'PRIMARY') ?? agent.nodes?.[0]
-  const standby = agent.nodes?.find(n => n.role === 'standby' || n.role === 'STANDBY') ?? agent.nodes?.[1]
+  const primary = agent.nodes?.find(n => n.role === 'PRIMARY') ?? null
+  const standby = agent.nodes?.find(n => n.role === 'STANDBY') ?? null
   const pm = primary?.metrics ?? {}
   const sm = standby?.metrics ?? {}
   const syncOk = !agent.failoverEvent && primary && standby
@@ -55,7 +55,12 @@ export default function SyncStatusPanel({ agents = [], onRefresh }) {
   return (
     <div className="card-bg rounded-xl p-6">
       <div className="flex justify-between items-center mb-6">
-        <h3 className="text-lg font-bold text-white">이중화 동기화 상태 (실시간)</h3>
+        <div>
+          <h3 className="text-lg font-bold text-white">이중화 동기화 상태 (실시간)</h3>
+          {agents.length <= 1 && agent && (
+            <p className="text-xs text-gray-500 mt-0.5">{agent.clusterName}</p>
+          )}
+        </div>
         <div className="flex items-center gap-3">
           {agents.length > 1 && (
             <select

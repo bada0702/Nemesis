@@ -9,9 +9,9 @@ const PAGE_TITLES = {
   '/ha/groups':            { title: '클러스터 목록', sub: '등록된 HA 클러스터를 관리합니다.' },
   '/settings/clusters':    { title: '클러스터 설정', sub: 'VIP·노드·Failover 정책을 설정합니다.' },
   '/ha/sequence':          { title: 'HA 운영 절차',  sub: '기동·중지·Failover 절차 및 Runbook을 관리합니다.' },
-  '/services':             { title: '서비스',        sub: '보호 대상 서비스 목록을 확인합니다.' },
-  '/db':                   { title: 'DB',            sub: '데이터베이스 상태를 확인합니다.' },
-  '/sw':                   { title: 'Application',   sub: '애플리케이션 서비스 상태를 확인합니다.' },
+  '/services':             { title: '서비스 카탈로그', sub: '논리 서비스 등록·HA 대상 지정·노드별 상태를 관리합니다.' },
+  '/services?type=DB':     { title: 'DB',            sub: '데이터베이스 서비스 상태를 확인합니다.' },
+  '/services?type=APP':    { title: 'Application',   sub: '애플리케이션 서비스 상태를 확인합니다.' },
   '/docker/containers':    { title: '컨테이너',      sub: '컨테이너 실행 상태를 확인합니다.' },
   '/inspection':           { title: '점검 관리',     sub: '정기 점검 일정을 관리합니다.' },
   '/monitoring/cluster':   { title: '클러스터 상태', sub: '복제·하트비트·에이전트 상태를 통합 확인합니다.' },
@@ -30,7 +30,9 @@ export default function Navbar({ onMenuToggle }) {
   const { user, logout } = useAuth()
   const [now, setNow] = useState('')
 
-  const page = PAGE_TITLES[location.pathname] ?? { title: 'NEMESIS', sub: '' }
+  const page = PAGE_TITLES[location.pathname + location.search]
+    ?? PAGE_TITLES[location.pathname]
+    ?? { title: 'NEMESIS', sub: '' }
 
   useEffect(() => {
     const fmt = () => {

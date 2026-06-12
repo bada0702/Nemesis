@@ -158,8 +158,8 @@ export default function Dashboard() {
         <div className="xl:col-span-8 flex flex-col gap-6">
           <SyncStatusPanel agents={agents} onRefresh={load} />
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <DbPanel />
-            <SwPanel items={swItems} />
+            <DbPanel items={swItems.filter(i => i.type === 'DB')} />
+            <SwPanel items={swItems.filter(i => i.type !== 'DB')} />
             <DockerPanel nodes={docker} />
           </div>
         </div>

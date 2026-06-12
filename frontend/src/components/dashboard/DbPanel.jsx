@@ -1,6 +1,8 @@
 import React from 'react'
 import { Database } from 'lucide-react'
 
+const RUNNING_STATES = new Set(['running', 'active', 'ok', 'RUNNING', 'ACTIVE'])
+
 export default function DbPanel({ items }) {
   const rows = items ?? []
 
@@ -14,18 +16,21 @@ export default function DbPanel({ items }) {
         <p className="text-[11px] text-gray-600 py-2">수집된 DB 데이터 없음</p>
       ) : (
         <div className="space-y-3">
-          {rows.map((row, i) => (
-            <div key={i} className="flex items-center justify-between text-[11px]">
-              <div className="flex items-center space-x-2">
-                <Database className="w-4 h-4 text-blue-400" />
-                <span className="text-gray-300">{row.name}</span>
+          {rows.map((row, i) => {
+            const ok = RUNNING_STATES.has(row.state ?? row.status)
+            return (
+              <div key={i} className="flex items-center justify-between text-[11px]">
+                <div className="flex items-center space-x-2">
+                  <Database className="w-4 h-4 text-blue-400" />
+                  <span className="text-gray-300">{row.name}</span>
+                </div>
+                <span className="text-white">{row.state ?? row.status}</span>
+                <span className={ok ? 'status-green' : 'status-red'}>
+                  ● {ok ? '정상' : '오류'}
+                </span>
               </div>
-              <span className="text-white">{row.status}</span>
-              <span className={row.ok !== false ? 'status-green' : 'status-red'}>
-                ● {row.ok !== false ? '정상' : '오류'}
-              </span>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
     </div>

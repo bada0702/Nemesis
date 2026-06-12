@@ -81,10 +81,12 @@ export const scanSw              = (nodeId)        => client.get(`/sw/scan?nodeI
 export const registerSw          = (data)          => client.post('/sw/register', data)
 export const listSw              = (nodeId)        => client.get(`/sw/list?nodeId=${nodeId}`)
 
-// 서비스 CRUD
-export const getServices    = ()     => client.get('/services')
-export const createService  = (data) => client.post('/services', data)
-export const deleteService  = (id)   => client.delete(`/services/${id}`)
+// 서비스 카탈로그 (클러스터 논리 서비스 + HA 지정)
+export const getServiceCatalog    = (cid)          => client.get(`/clusters/${cid}/services`)
+export const scanServiceCatalog   = (cid)          => client.post(`/clusters/${cid}/services/scan`)
+export const registerServices     = (cid, items)   => client.post(`/clusters/${cid}/services`, { items })
+export const updateManagedService = (cid, sid, d)  => client.put(`/clusters/${cid}/services/${sid}`, d)
+export const deleteManagedService = (cid, sid)     => client.delete(`/clusters/${cid}/services/${sid}`)
 
 // AI 채팅
 export const aiChat              = (message)       => client.post('/ai/chat', { message })

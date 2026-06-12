@@ -440,16 +440,12 @@ export default function Topology() {
 
   // SVG 레이아웃
   const SVG_W  = 700
-  const SVG_H  = 400
+  const SVG_H  = 300
   const BOX_W  = 170
   const BOX_H  = 120
   const MGMT_Y = 10
   const MGMT_X = (SVG_W - BOX_W) / 2
   const NODE_Y = 150
-  const SAN_Y  = 285
-  const SAN_X  = (SVG_W - 250) / 2
-  const SAN_W  = 250
-  const SAN_H  = 68
 
   const nodeCount   = allNodes.length
   const nodeSpacing = Math.min((SVG_W - 30) / nodeCount, 190)
@@ -552,9 +548,9 @@ export default function Topology() {
           </div>
         )}
 
-        <div className="flex" style={{ minHeight: 420 }}>
+        <div className="flex" style={{ minHeight: 320 }}>
           <div className="flex-1 p-4">
-            <svg width="100%" viewBox={`0 0 ${SVG_W} ${SVG_H}`} className="overflow-visible" style={{ height: 360 }}>
+            <svg width="100%" viewBox={`0 0 ${SVG_W} ${SVG_H}`} className="overflow-visible" style={{ height: 280 }}>
 
               {/* Management → Nodes 제어선 */}
               {nodePositions.map(({ node, x }) => (
@@ -585,16 +581,6 @@ export default function Topology() {
                 )
               })}
 
-              {/* Nodes → SAN */}
-              {nodePositions.map(({ node, x }) => (
-                <ConnLine key={`san-${node.nodeId}`}
-                  x1={x + BOX_W / 2}     y1={NODE_Y + BOX_H}
-                  x2={SAN_X + SAN_W / 2} y2={SAN_Y}
-                  color={node.state === 'RUNNING' ? '#fbbf24' : '#374151'}
-                  animated={node.state === 'RUNNING'}
-                  label="I/O"
-                />
-              ))}
 
               {/* VIP 배지 */}
               {nodePositions[0] && (
@@ -642,32 +628,6 @@ export default function Topology() {
                 />
               ))}
 
-              {/* Shared SAN Array */}
-              <foreignObject x={SAN_X} y={SAN_Y} width={SAN_W} height={SAN_H}>
-                <div xmlns="http://www.w3.org/1999/xhtml"
-                  className="w-full h-full flex items-center gap-3 rounded-xl border-2 border-amber-500/40 shadow-[0_0_20px_rgba(245,158,11,0.2)] bg-surface-container"
-                  style={{ padding: '10px 14px' }}
-                >
-                  <div className="flex flex-col items-center gap-1">
-                    <span className="material-symbols-outlined text-amber-400 text-[20px]">storage</span>
-                    <span className="text-[8px] text-amber-400 font-mono">SAN</span>
-                  </div>
-                  <div>
-                    <p className="text-[9px] font-black text-on-surface font-display">Shared SAN Array</p>
-                    <p className="text-[8px] font-mono text-slate-500">FC · /dev/sdb · /dev/sdc</p>
-                    <div className="flex gap-2 mt-1">
-                      {['/data', '/log', '/backup'].map(mp => (
-                        <span key={mp} className="text-[8px] text-amber-400/60 font-mono border border-amber-500/20 rounded px-1">{mp}</span>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="ml-auto text-right">
-                    <p className="text-[8px] text-slate-600 uppercase tracking-widest">Bandwidth</p>
-                    <p className="text-[10px] font-bold text-amber-400 font-mono">4.2 GB/s</p>
-                    <p className="text-[8px] text-slate-600">IOPS: 120K</p>
-                  </div>
-                </div>
-              </foreignObject>
 
             </svg>
           </div>
@@ -697,7 +657,6 @@ export default function Topology() {
           { color: '#38bdf8', label: 'Control (Mgmt → Node)' },
           { color: '#34d399', label: 'Heartbeat (OK)' },
           { color: '#ef4444', label: 'Heartbeat (Down)' },
-          { color: '#fbbf24', label: 'Storage I/O' },
         ].map(l => (
           <div key={l.label} className="flex items-center gap-1.5">
             <svg width="24" height="6"><line x1="0" y1="3" x2="24" y2="3" stroke={l.color} strokeWidth="2" strokeDasharray="4 2" /></svg>

@@ -18,10 +18,10 @@ const MENU = [
   ]},
 
   { label: '서비스', icon: Shield, path: null, children: [
-    { label: '전체 서비스',  path: '/services'           },
-    { label: 'DB',          path: '/db'                 },
-    { label: 'Application', path: '/sw'                 },
-    { label: '컨테이너',    path: '/docker/containers'  },
+    { label: '전체 서비스',  path: '/services'            },
+    { label: 'DB',          path: '/services?type=DB'   },
+    { label: 'Application', path: '/services?type=APP'  },
+    { label: '컨테이너',    path: '/docker/containers'   },
   ]},
 
   { label: '운영', icon: Zap, path: null, children: [
@@ -44,9 +44,13 @@ function MenuItem({ item, collapsed }) {
   const [open, setOpen] = useState(false)
   const Icon = item.icon
 
+  // 쿼리스트링 포함 비교 (예: /services?type=DB)
+  const current = location.pathname + location.search
+  const matches = p => p.includes('?') ? current === p : location.pathname === p && !location.search
+
   const isActive = item.path
-    ? location.pathname === item.path
-    : item.children?.some(c => location.pathname === c.path)
+    ? matches(item.path)
+    : item.children?.some(c => matches(c.path))
 
   if (item.children) {
     if (collapsed) {
@@ -80,7 +84,7 @@ function MenuItem({ item, collapsed }) {
                 key={child.label}
                 onClick={() => navigate(child.path)}
                 className={`w-full text-left px-3 py-2 text-xs rounded-lg transition-colors
-                  ${location.pathname === child.path
+                  ${matches(child.path)
                     ? 'text-blue-400 bg-blue-600/10'
                     : 'text-gray-500 hover:text-white hover:bg-gray-800'}`}
               >

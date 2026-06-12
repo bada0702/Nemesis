@@ -2,15 +2,17 @@ import React from 'react'
 
 const TYPE_COLOR_CLASS = { WAS: 'bg-blue-600', WEB: 'bg-yellow-600', DB: 'bg-green-600' }
 
+const RUNNING_STATES = new Set(['running', 'active', 'ok', 'RUNNING', 'ACTIVE'])
+
 export default function SwPanel({ items }) {
   const rows = (items ?? []).slice(0, 8).map(i => ({
-    name: i.name, status: i.state, ok: i.state === 'running', type: i.type,
+    name: i.name, status: i.state, ok: RUNNING_STATES.has(i.state), type: i.type,
   }))
 
   return (
     <div className="card-bg rounded-xl p-4">
       <div className="flex justify-between items-center mb-4">
-        <h4 className="text-sm font-bold text-white">SW / Middleware 상태</h4>
+        <h4 className="text-sm font-bold text-white">Application</h4>
         <button className="text-[10px] text-gray-500 hover:text-white py-2.5 px-2 min-h-[44px] flex items-center">더보기 →</button>
       </div>
       {rows.length === 0 ? (

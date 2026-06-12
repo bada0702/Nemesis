@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
-import { GitBranch, Plus, Trash2, Edit2, RefreshCw } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { GitBranch, Plus, Trash2, Edit2, RefreshCw, Server } from 'lucide-react'
 import { getClusters, createCluster, updateCluster, deleteCluster } from '../../api/client'
 
 function Modal({ initial, onClose, onSaved }) {
@@ -51,6 +52,7 @@ function Modal({ initial, onClose, onSaved }) {
 }
 
 export default function ClustersSettings() {
+  const navigate = useNavigate()
   const [clusters, setClusters] = useState([])
   const [loading, setLoading]   = useState(true)
   const [modal, setModal]       = useState(null)
@@ -104,6 +106,9 @@ export default function ClustersSettings() {
                   </div>
                 </div>
                 <div className="flex gap-2">
+                  <button onClick={() => navigate(`/cluster/${c.id}/settings`)} className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-blue-500/30 text-blue-400 hover:bg-blue-500/10">
+                    <Server className="w-3.5 h-3.5" /> 노드 관리
+                  </button>
                   <button onClick={() => setModal(c)} className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-gray-700 text-gray-400 hover:text-white hover:border-gray-600">
                     <Edit2 className="w-3.5 h-3.5" /> 수정
                   </button>

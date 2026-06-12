@@ -29,6 +29,10 @@ export default function Containers() {
     c.name.toLowerCase().includes(filter.toLowerCase())
   )
 
+  function handleControl(container, action) {
+    alert(`${container.name} ${action === 'start' ? '시작' : '중지'} 기능은 에이전트 명령 채널 연동 후 활성화됩니다.`)
+  }
+
   return (
     <div className="p-8 pt-0 space-y-6">
       <div className="flex items-center justify-between">
@@ -110,8 +114,8 @@ export default function Containers() {
                   <td className="py-3 px-3">
                     <div className="flex gap-1">
                       {c.status !== 'running'
-                        ? <button className="text-[10px] px-2 py-1 rounded bg-green-500/10 text-green-400 border border-green-500/20">시작</button>
-                        : <button className="text-[10px] px-2 py-1 rounded bg-red-500/10 text-red-400 border border-red-500/20">중지</button>}
+                        ? <button onClick={() => handleControl(c, 'start')} className="text-[10px] px-2 py-1 rounded bg-green-500/10 text-green-400 border border-green-500/20 hover:bg-green-500/20">시작</button>
+                        : <button onClick={() => handleControl(c, 'stop')} className="text-[10px] px-2 py-1 rounded bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20">중지</button>}
                       <button className="text-[10px] px-2 py-1 rounded border border-gray-700 text-gray-400">로그</button>
                     </div>
                   </td>

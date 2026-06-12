@@ -5,12 +5,10 @@ import { AuthProvider, useAuth } from './auth/AuthContext'
 import Login from './pages/Login'
 
 import Dashboard         from './pages/Dashboard'
-import Services          from './pages/Services'
+import ServiceCatalog    from './pages/ServiceCatalog'
 import HaGroups          from './pages/ha/Groups'
 import HaSequence        from './pages/ha/Sequence'
 import ServerList        from './pages/servers/List'
-import Db                from './pages/Db'
-import Sw                from './pages/Sw'
 import DockerContainers  from './pages/docker/Containers'
 import DockerImages      from './pages/docker/Images'
 import Inspection        from './pages/Inspection'
@@ -48,7 +46,7 @@ function Gate() {
         <Routes>
           {/* 메인 */}
           <Route path="/"                      element={<Dashboard />} />
-          <Route path="/services"              element={<Services />} />
+          <Route path="/services"              element={<ServiceCatalog />} />
 
           {/* 클러스터 */}
           <Route path="/clusters/tree"         element={<ClusterTree />} />
@@ -61,9 +59,9 @@ function Gate() {
           <Route path="/servers/list"          element={<ServerList />} />
           <Route path="/nodes"                 element={<Navigate to="/servers/list" replace />} />
 
-          {/* DB / SW */}
-          <Route path="/db"                    element={<Db />} />
-          <Route path="/sw"                    element={<Sw />} />
+          {/* DB / SW — 서비스 카탈로그의 타입 필터 뷰 */}
+          <Route path="/db"                    element={<Navigate to="/services?type=DB" replace />} />
+          <Route path="/sw"                    element={<Navigate to="/services?type=APP" replace />} />
 
           {/* Docker */}
           <Route path="/docker/containers"     element={<DockerContainers />} />

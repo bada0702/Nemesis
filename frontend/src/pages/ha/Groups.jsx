@@ -54,8 +54,8 @@ export default function HaGroups() {
       ) : (
         <div className="space-y-4">
           {clusters.map(c => {
-            const primary = c.nodes?.find(n => n.role === 'PRIMARY' || n.role === 'active')
-            const standby = c.nodes?.find(n => n.role === 'STANDBY' || n.role === 'standby')
+            const primary = c.nodes?.find(n => n.role === 'PRIMARY') ?? null
+            const standby = c.nodes?.find(n => n.role === 'STANDBY') ?? null
             const hasFault = c.nodes?.some(n => n.role === 'FAULT' || n.state === 'STOPPED')
             return (
               <div key={c.clusterId} className="card-bg rounded-xl p-6">
