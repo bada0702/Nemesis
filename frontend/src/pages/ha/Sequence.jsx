@@ -229,12 +229,13 @@ const TYPE_LABELS   = { MAINTENANCE: '정기점검', BACKUP: 'DB백업', FAILOVE
 const STATUS_COLORS = { COMPLETED: 'text-green-400', IN_PROGRESS: 'text-blue-400', SCHEDULED: 'text-yellow-400' }
 
 function RunbookTab() {
-  const [list,    setList]    = useState([])
-  const [active,  setActive]  = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [adding,  setAdding]  = useState(false)
-  const [form,    setForm]    = useState({ title: '', type: 'MAINTENANCE', target: '' })
-  const [saving,  setSaving]  = useState(false)
+  const [list,     setList]     = useState([])
+  const [active,   setActive]   = useState(null)
+  const [loading,  setLoading]  = useState(true)
+  const [adding,   setAdding]   = useState(false)
+  const [form,     setForm]     = useState({ title: '', type: 'MAINTENANCE', target: '' })
+  const [saving,   setSaving]   = useState(false)
+  const [stepping, setStepping] = useState({})
 
   async function load() {
     setLoading(true)
@@ -252,8 +253,11 @@ function RunbookTab() {
   }
 
   async function advanceStep(runbookId, stepIndex) {
+    if (stepping[runbookId]) return
+    setStepping(s => ({ ...s, [runbookId]: true }))
     try { await updateRunbookStep(runbookId, stepIndex); await load() }
     catch { /* ignore */ }
+    finally { setStepping(s => ({ ...s, [runbookId]: false })) }
   }
 
   return (
@@ -322,7 +326,7 @@ function RunbookTab() {
                 <div className="border-t border-gray-800 px-5 py-4 space-y-2">
                   {rb.steps.map((step, i) => (
                     <div key={i} className="flex items-center gap-3">
-                      <button onClick={() => advanceStep(rb.id, i)} disabled={step.done}
+                      <button onClick={() => advanceStep(rb.id, i)} disabled={step.done || !!stepping[rb.id]}
                         className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 transition-all
                           ${step.done   ? 'bg-green-500' : step.active ? 'bg-blue-600 animate-pulse' : 'bg-gray-700 hover:bg-gray-600'}`}>
                         {step.done   && <Check    className="w-3 h-3 text-white" />}
@@ -473,10 +477,12 @@ export default function HaSequence() {
               }`}>
               <Icon className={`w-4 h-4 ${activeTab === tab.key ? tab.color : ''}`} />
               {tab.label}
-              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold
-                ${activeTab === tab.key ? 'bg-white/15 text-white' : 'bg-gray-800 text-gray-600'}`}>
-                {count}
-              </span>
+              {tab.key !== 'RUNBOOK' && (
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold
+                  ${activeTab === tab.key ? 'bg-white/15 text-white' : 'bg-gray-800 text-gray-600'}`}>
+                  {count}
+                </span>
+              )}
             </button>
           )
         })}
