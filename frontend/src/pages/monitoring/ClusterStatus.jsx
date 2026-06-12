@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import {
   CheckCircle2, AlertCircle, RefreshCw, Heart, Database,
-  Activity, Wifi, WifiOff, AlertTriangle, Loader2, ArrowRightLeft, Server,
+  Activity, AlertTriangle, Loader2, ArrowRightLeft, Server,
 } from 'lucide-react'
 import {
   getClusters, getClusterStatus, getClusterNodes,
@@ -400,7 +400,7 @@ export default function ClusterStatus() {
   const [loading,   setLoading]   = useState(true)
   const [activeTab, setActiveTab] = useState('replication')
 
-  async function load() {
+  const load = useCallback(async () => {
     setLoading(true)
     try {
       const listRes = await getClusters()
@@ -424,7 +424,7 @@ export default function ClusterStatus() {
       setStatuses(stats)
       setNodeMap(nm)
     } finally { setLoading(false) }
-  }
+  }, [])
 
   useEffect(() => {
     load()
@@ -432,7 +432,7 @@ export default function ClusterStatus() {
       if (activeTab === 'replication') load()
     }, 5000)
     return () => clearInterval(iv)
-  }, [activeTab])
+  }, [load, activeTab])
 
   return (
     <div className="p-8 pt-0 space-y-5">
