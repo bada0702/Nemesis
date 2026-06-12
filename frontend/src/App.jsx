@@ -32,6 +32,8 @@ import AlertCenter       from './pages/AlertCenter'
 import AuditLog          from './pages/AuditLog'
 import AiAnalysis        from './pages/AiAnalysis'
 
+import ClusterStatus     from './pages/monitoring/ClusterStatus'
+
 export default function App() {
   return (
     <AuthProvider>
@@ -71,8 +73,12 @@ function Gate() {
           <Route path="/docker/containers"     element={<DockerContainers />} />
           <Route path="/docker/images"         element={<DockerImages />} />
 
+          {/* 모니터링 */}
+          <Route path="/monitoring/cluster"    element={<ClusterStatus />} />
+          <Route path="/ha/sync"               element={<Navigate to="/monitoring/cluster" replace />} />
+          <Route path="/runbook"               element={<Navigate to="/ha/sequence" replace />} />
+
           {/* 작업 */}
-          <Route path="/runbook"               element={<Runbook />} />
           <Route path="/inspection"            element={<Inspection />} />
           <Route path="/reports"               element={<Reports />} />
 
