@@ -1,57 +1,40 @@
 import React, { useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import {
-  LayoutDashboard, GitBranch, Layers, Server, PlayCircle,
-  Activity, BarChart3, Settings,
+  LayoutDashboard, GitBranch, Shield, Zap,
+  Activity, Settings,
   ChevronDown, ChevronLeft, ChevronRight, X,
 } from 'lucide-react'
 import { LogoMark, LogoFull } from './Logo'
 
-// 7축 기능 네비게이션 — 기술별 메뉴(DB/SW/Docker)는 "서비스" 아래로 흡수하고,
-// 도메인 트리(Cluster→Node→Service)는 사이드바가 아니라 "클러스터" 화면 안에 둔다.
-// 기존 라우트는 그대로 재사용한다(페이지 삭제 없음).
 const MENU = [
   { label: '대시보드', icon: LayoutDashboard, path: '/' },
 
-  // 클러스터 = HA 그룹. 트리/토폴로지/동기화/VIP는 이 섹션의 메인 뷰로 들어간다.
   { label: '클러스터', icon: GitBranch, path: null, children: [
-    { label: '트리 뷰',     path: '/clusters/tree' },
-    { label: '클러스터 목록', path: '/ha/groups'    },
-    { label: '동기화 현황',  path: '/ha/sync'      },
-    { label: '운영 절차',    path: '/ha/sequence'  },
+    { label: '트리 뷰',      path: '/clusters/tree'     },
+    { label: '클러스터 목록', path: '/ha/groups'         },
+    { label: '클러스터 설정', path: '/settings/clusters' },
+    { label: 'HA 운영 절차', path: '/ha/sequence'       },
   ]},
 
-  // 보호 대상 서비스(Protected Services) — type 속성으로 DB/SW/컨테이너를 통합.
-  // 전환기에는 기존 페이지를 type 필터처럼 자식으로 노출한다.
-  { label: '서비스', icon: Layers, path: null, children: [
-    { label: '전체 서비스', path: '/services' },
-    { label: 'DB',        path: '/db' },
-    { label: 'SW',        path: '/sw' },
-    { label: '컨테이너',   path: '/docker/containers' },
-    { label: '이미지',     path: '/docker/images' },
+  { label: '서비스', icon: Shield, path: null, children: [
+    { label: '전체 서비스',  path: '/services'           },
+    { label: 'DB',          path: '/db'                 },
+    { label: 'Application', path: '/sw'                 },
+    { label: '컨테이너',    path: '/docker/containers'  },
   ]},
 
-  { label: '노드', icon: Server, path: '/servers/list' },
-
-  // 운영 = 사람이 일으키는 액션(Failover/Failback/Runbook/점검).
-  { label: '운영', icon: PlayCircle, path: null, children: [
-    { label: 'Runbook', path: '/runbook' },
+  { label: '운영', icon: Zap, path: null, children: [
     { label: '점검 관리', path: '/inspection' },
   ]},
 
-  // 모니터링 = 시스템이 만들어내는 신호(상태/알람/이벤트). 에이전트 상태는
-  // 노드 가로지르는 fleet 신호라 여기에 집계 뷰로 함께 둔다.
   { label: '모니터링', icon: Activity, path: null, children: [
-    { label: '알람 현황',    path: '/alerts' },
-    { label: '알람 설정',    path: '/alerts/config' },
-    { label: '에이전트 상태', path: '/settings/agents' },
+    { label: '클러스터 상태', path: '/monitoring/cluster' },
+    { label: '리포트',        path: '/reports'            },
   ]},
 
-  { label: '리포트', icon: BarChart3, path: '/reports' },
-
   { label: '시스템', icon: Settings, path: null, children: [
-    { label: '클러스터 설정', path: '/settings/clusters' },
-    { label: '시스템 설정',  path: '/settings/system' },
+    { label: '시스템 설정', path: '/settings/system' },
   ]},
 ]
 
