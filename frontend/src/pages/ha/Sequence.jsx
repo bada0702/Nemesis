@@ -505,72 +505,74 @@ export default function HaSequence() {
       )}
 
       {/* 단계 목록 */}
-      <div className="card-bg rounded-xl overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-800">
-          <span className="text-sm font-bold text-white">
-            {TABS.find(t => t.key === activeTab)?.label}
-            {currentCluster && <span className="text-gray-500 font-normal ml-2">· {currentCluster.name}</span>}
-          </span>
-          <button onClick={() => setModal('new')}
-            className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-blue-600/15 border border-blue-600/30 text-blue-400 hover:bg-blue-600/25">
-            <Plus className="w-3.5 h-3.5" /> 단계 추가
-          </button>
-        </div>
-
-        {loading ? (
-          <div className="py-16 text-center text-gray-500 text-sm">로딩 중...</div>
-        ) : steps.length === 0 ? (
-          <div className="py-16 text-center">
-            <Zap className="w-8 h-8 text-gray-700 mx-auto mb-3" />
-            <p className="text-gray-500 text-sm">정의된 절차가 없습니다.</p>
+      {activeTab !== 'RUNBOOK' && (
+        <div className="card-bg rounded-xl overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-800">
+            <span className="text-sm font-bold text-white">
+              {TABS.find(t => t.key === activeTab)?.label}
+              {currentCluster && <span className="text-gray-500 font-normal ml-2">· {currentCluster.name}</span>}
+            </span>
             <button onClick={() => setModal('new')}
-              className="mt-4 text-xs text-blue-400 hover:underline">+ 첫 번째 단계 추가</button>
+              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-blue-600/15 border border-blue-600/30 text-blue-400 hover:bg-blue-600/25">
+              <Plus className="w-3.5 h-3.5" /> 단계 추가
+            </button>
           </div>
-        ) : (
-          <div className="p-4 space-y-2">
-            {/* Failover: VIP_TRANSFER 위치에 phase 구분선 삽입 */}
-            {activeTab === 'FAILOVER' && vipIdx >= 0 ? (
-              <>
-                {/* Phase 1: 중지 */}
-                {vipIdx > 0 && (
-                  <>
-                    <div className="px-1 py-1">
-                      <span className="text-[10px] font-bold uppercase text-red-400 tracking-widest">Phase 1 · 서비스 중지</span>
-                    </div>
-                    {steps.slice(0, vipIdx).map((s, i) => (
-                      <StepRow key={s.id} step={s} idx={i} total={steps.length}
-                        onMove={moveStep} onEdit={idx => setModal({ idx })} onRemove={removeStep} />
-                    ))}
-                  </>
-                )}
-                {/* Phase 2: VIP */}
-                <div className="px-1 py-2">
-                  <span className="text-[10px] font-bold uppercase text-purple-400 tracking-widest">Phase 2 · VIP 전환</span>
-                </div>
-                <StepRow key={steps[vipIdx].id} step={steps[vipIdx]} idx={vipIdx} total={steps.length}
-                  onMove={moveStep} onEdit={idx => setModal({ idx })} onRemove={removeStep} />
-                {/* Phase 3: 기동 */}
-                {vipIdx < steps.length - 1 && (
-                  <>
-                    <div className="px-1 py-2">
-                      <span className="text-[10px] font-bold uppercase text-green-400 tracking-widest">Phase 3 · 서비스 기동</span>
-                    </div>
-                    {steps.slice(vipIdx + 1).map((s, i) => (
-                      <StepRow key={s.id} step={s} idx={vipIdx + 1 + i} total={steps.length}
-                        onMove={moveStep} onEdit={idx => setModal({ idx })} onRemove={removeStep} />
-                    ))}
-                  </>
-                )}
-              </>
-            ) : (
-              steps.map((s, i) => (
-                <StepRow key={s.id} step={s} idx={i} total={steps.length}
-                  onMove={moveStep} onEdit={idx => setModal({ idx })} onRemove={removeStep} />
-              ))
-            )}
-          </div>
-        )}
-      </div>
+
+          {loading ? (
+            <div className="py-16 text-center text-gray-500 text-sm">로딩 중...</div>
+          ) : steps.length === 0 ? (
+            <div className="py-16 text-center">
+              <Zap className="w-8 h-8 text-gray-700 mx-auto mb-3" />
+              <p className="text-gray-500 text-sm">정의된 절차가 없습니다.</p>
+              <button onClick={() => setModal('new')}
+                className="mt-4 text-xs text-blue-400 hover:underline">+ 첫 번째 단계 추가</button>
+            </div>
+          ) : (
+            <div className="p-4 space-y-2">
+              {/* Failover: VIP_TRANSFER 위치에 phase 구분선 삽입 */}
+              {activeTab === 'FAILOVER' && vipIdx >= 0 ? (
+                <>
+                  {/* Phase 1: 중지 */}
+                  {vipIdx > 0 && (
+                    <>
+                      <div className="px-1 py-1">
+                        <span className="text-[10px] font-bold uppercase text-red-400 tracking-widest">Phase 1 · 서비스 중지</span>
+                      </div>
+                      {steps.slice(0, vipIdx).map((s, i) => (
+                        <StepRow key={s.id} step={s} idx={i} total={steps.length}
+                          onMove={moveStep} onEdit={idx => setModal({ idx })} onRemove={removeStep} />
+                      ))}
+                    </>
+                  )}
+                  {/* Phase 2: VIP */}
+                  <div className="px-1 py-2">
+                    <span className="text-[10px] font-bold uppercase text-purple-400 tracking-widest">Phase 2 · VIP 전환</span>
+                  </div>
+                  <StepRow key={steps[vipIdx].id} step={steps[vipIdx]} idx={vipIdx} total={steps.length}
+                    onMove={moveStep} onEdit={idx => setModal({ idx })} onRemove={removeStep} />
+                  {/* Phase 3: 기동 */}
+                  {vipIdx < steps.length - 1 && (
+                    <>
+                      <div className="px-1 py-2">
+                        <span className="text-[10px] font-bold uppercase text-green-400 tracking-widest">Phase 3 · 서비스 기동</span>
+                      </div>
+                      {steps.slice(vipIdx + 1).map((s, i) => (
+                        <StepRow key={s.id} step={s} idx={vipIdx + 1 + i} total={steps.length}
+                          onMove={moveStep} onEdit={idx => setModal({ idx })} onRemove={removeStep} />
+                      ))}
+                    </>
+                  )}
+                </>
+              ) : (
+                steps.map((s, i) => (
+                  <StepRow key={s.id} step={s} idx={i} total={steps.length}
+                    onMove={moveStep} onEdit={idx => setModal({ idx })} onRemove={removeStep} />
+                ))
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* 저장 버튼 (Runbook 탭 제외) */}
       {activeTab !== 'RUNBOOK' && (
