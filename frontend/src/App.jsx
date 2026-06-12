@@ -58,7 +58,6 @@ function Gate() {
 
           {/* HA */}
           <Route path="/ha/groups"             element={<HaGroups />} />
-          <Route path="/ha/sync"               element={<HaSync />} />
           <Route path="/ha/sequence"           element={<HaSequence />} />
 
           {/* 서버 */}
