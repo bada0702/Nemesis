@@ -17,6 +17,7 @@ import Alerts            from './pages/alerts/Alerts'
 import AlertConfig       from './pages/alerts/Config'
 import ClustersSettings  from './pages/settings/Clusters'
 import AgentsSettings    from './pages/settings/Agents'
+import AgentInstall      from './pages/settings/AgentInstall'
 import SystemSettings    from './pages/settings/System'
 
 import ClusterTree       from './pages/clusters/Tree'
@@ -81,9 +82,10 @@ function Gate() {
           <Route path="/alerts/config"         element={<AlertConfig />} />
 
           {/* 설정 */}
-          <Route path="/settings/clusters"     element={<ClustersSettings />} />
-          <Route path="/settings/agents"       element={<AgentsSettings />} />
-          <Route path="/settings/system"       element={<SystemSettings />} />
+          <Route path="/settings/clusters"        element={<ClustersSettings />} />
+          <Route path="/settings/agents"         element={<AgentsSettings />} />
+          <Route path="/settings/agents/install" element={<AgentInstall />} />
+          <Route path="/settings/system"         element={<SystemSettings />} />
 
           {/* 클러스터 상세 (기존) */}
           <Route path="/cluster/:id"           element={<ClusterDetail />} />

@@ -34,7 +34,8 @@ const MENU = [
   ]},
 
   { label: '시스템', icon: Settings, path: null, children: [
-    { label: '시스템 설정', path: '/settings/system' },
+    { label: '시스템 설정',  path: '/settings/system'          },
+    { label: '에이전트 설치', path: '/settings/agents/install' },
   ]},
 ]
 
