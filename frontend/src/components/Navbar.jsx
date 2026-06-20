@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { Bell, HelpCircle, User, Menu, LogOut } from 'lucide-react'
 import { useLocation } from 'react-router-dom'
 import { useAuth, roleLabel } from '../auth/AuthContext'
+import { getAiNotifications } from '../api/client'
 
 const PAGE_TITLES = {
   '/':                     { title: '대시보드',      sub: '전체 시스템의 상태를 한눈에 확인합니다.' },
@@ -29,6 +30,17 @@ export default function Navbar({ onMenuToggle }) {
   const location = useLocation()
   const { user, logout } = useAuth()
   const [now, setNow] = useState('')
+  const [notif, setNotif] = useState({ pending: 0, recent: [] })
+  const [open, setOpen] = useState(false)
+
+  useEffect(() => {
+    let alive = true
+    const load = () => getAiNotifications()
+      .then(r => { if (alive) setNotif(r.data) }).catch(() => {})
+    load()
+    const id = setInterval(load, 10000)
+    return () => { alive = false; clearInterval(id) }
+  }, [])
 
   const page = PAGE_TITLES[location.pathname + location.search]
     ?? PAGE_TITLES[location.pathname]
@@ -67,10 +79,25 @@ export default function Navbar({ onMenuToggle }) {
         <span className="text-gray-300">{now}</span>
         <div className="flex items-center space-x-4">
           <div className="relative">
-            <Bell className="w-5 h-5 text-gray-400" />
-            <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] text-white">
-              3
-            </span>
+            <button onClick={() => setOpen(o => !o)} className="relative p-1" aria-label="알림">
+              <Bell className="w-5 h-5 text-gray-400" />
+              {notif.pending > 0 && (
+                <span className="absolute -top-1 -right-1 flex h-4 min-w-4 px-1 items-center justify-center rounded-full bg-red-500 text-[10px] text-white">
+                  {notif.pending}
+                </span>
+              )}
+            </button>
+            {open && (
+              <div className="absolute right-0 mt-2 w-72 bg-gray-900 border border-gray-700 rounded-lg shadow-xl z-50 p-2 text-xs">
+                <p className="text-gray-400 px-2 py-1">AI 알림 (대기 {notif.pending})</p>
+                {notif.recent.length === 0 && <p className="text-gray-600 px-2 py-2">알림 없음</p>}
+                {notif.recent.map(n => (
+                  <div key={n.id} className="px-2 py-1.5 border-t border-gray-800 text-gray-300">
+                    <span className="text-amber-400">[{n.status}]</span> {n.triggerReason}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
           <HelpCircle className="w-5 h-5 text-gray-400" />
           <div className="flex items-center space-x-2">
