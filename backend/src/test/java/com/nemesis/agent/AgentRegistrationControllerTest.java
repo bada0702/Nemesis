@@ -71,7 +71,9 @@ class AgentRegistrationControllerTest {
         mockMvc.perform(post("/api/agent/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
-                .andExpect(status().isUnauthorized());
+                // GlobalExceptionHandler가 IllegalArgumentException을 의도적으로 404로 매핑한다
+                // (프론트 axios 인터셉터가 401을 인증실패로 오인해 로그아웃시키는 것을 피하기 위함).
+                .andExpect(status().isNotFound());
     }
 
     @Test
