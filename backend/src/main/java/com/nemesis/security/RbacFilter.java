@@ -55,7 +55,10 @@ public class RbacFilter extends OncePerRequestFilter {
         if (!"POST".equalsIgnoreCase(method) && !"DELETE".equalsIgnoreCase(method)) return Need.NONE;
         if ("POST".equalsIgnoreCase(method) && path.equals("/api/auth/users")) return Need.ADMIN;
         if (path.endsWith("/failover"))                  return Need.OPERATOR;  // POST /api/clusters/{id}/failover
+        if (path.endsWith("/vip/apply"))                 return Need.OPERATOR;  // POST /api/clusters/{id}/vip/apply
+        if (path.endsWith("/vip/down"))                  return Need.OPERATOR;  // POST /api/clusters/{id}/vip/down
         if (path.matches("/api/agent/[^/]+/execute"))    return Need.OPERATOR;
+        if (path.matches("/api/ai/proposals/[^/]+/(approve|reject)")) return Need.OPERATOR;
         return Need.NONE;
     }
 
