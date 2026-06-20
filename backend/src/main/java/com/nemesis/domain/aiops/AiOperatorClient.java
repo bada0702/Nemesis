@@ -47,6 +47,18 @@ public class AiOperatorClient {
         }
     }
 
+    public String chat(String message) {
+        try {
+            HttpEntity<Map<String, Object>> req =
+                    new HttpEntity<>(Map.of("message", message), headers());
+            Map<?, ?> r = rt.postForObject(props.getBaseUrl() + "/ai/chat", req, Map.class);
+            return r != null ? String.valueOf(r.get("reply")) : null;
+        } catch (Exception e) {
+            log.warn("aibot chat 실패(폴백): {}", e.getMessage());
+            return null;
+        }
+    }
+
     public ExecuteResponse execute(UUID proposalId, List<Action> actions, Map<String, Object> sshTarget) {
         try {
             HttpEntity<Map<String, Object>> req = new HttpEntity<>(Map.of(

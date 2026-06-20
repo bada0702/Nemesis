@@ -2,6 +2,7 @@ package com.nemesis.domain.failover;
 
 import com.nemesis.detection.NodeFaultEvent;
 import com.nemesis.domain.ai.AiDecisionService;
+import com.nemesis.domain.aiops.AiOperatorService;
 import com.nemesis.domain.cluster.Cluster;
 import com.nemesis.domain.cluster.ClusterRepository;
 import lombok.RequiredArgsConstructor;
@@ -26,6 +27,7 @@ public class FailoverTriggerListener {
     private final FailoverOrchestrator orchestrator;
     private final ClusterRepository    clusterRepository;
     private final AiDecisionService    aiDecisionService;
+    private final AiOperatorService    aiOperatorService;
 
     @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
@@ -47,6 +49,14 @@ public class FailoverTriggerListener {
                     FailoverHistory.Trigger.DETECTION,
                     "감지: " + ev.reason());
             log.info("감지 트리거 페일오버 결과: {} - {}", r.status(), r.message());
+
+            // 페일오버는 자동 수행됨. 근본원인 조사는 비동기로 제안 생성(승인 필요).
+            try {
+                aiOperatorService.onFault(ev.clusterId(), ev.nodeId(), "ROOT_CAUSE",
+                        "페일오버 후 근본원인 조사: " + ev.reason());
+            } catch (Exception ex) {
+                log.warn("AI 조사 제안 생성 실패(무시): {}", ex.getMessage());
+            }
         } catch (Exception e) {
             log.error("감지 트리거 페일오버 실패 node={}", ev.nodeId(), e);
         }
