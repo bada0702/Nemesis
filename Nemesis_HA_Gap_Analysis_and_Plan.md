@@ -225,12 +225,19 @@
 | **E-3** | 인증·RBAC | ✅ 완료 | `users`+3단계 Role, PBKDF2 해시, HMAC 토큰, `RbacFilter`(failover/execute=operator+, 사용자생성=admin), `/api/auth/login`, 기본 admin 시드, CORS `*`→화이트리스트 |
 | **E-2** | 누락 컨트롤러 | ✅ 완료 | 실 데이터 소스 부재 페이지 10종(DB/Docker컨테이너·이미지/Inspection/Reports/Alerts설정/System설정/HA시퀀스·동기화/Services)에 재사용 `ComingSoon` 배너 적용 → 빈 화면/에러를 "준비중"으로 명시. 향후 수집 파이프라인 연결 시 배너만 제거 |
 | **③ 프론트 RBAC** | 로그인→토큰 첨부·계약 연결 | ✅ 완료 | `api/token.js`(저장), `client.js` axios 인터셉터(Bearer 첨부 + 401→자동 로그아웃), `auth/AuthContext`(login/logout/isOperator/isAdmin), `pages/Login.jsx`, `App` 인증 게이트, Navbar 실 사용자·로그아웃. role/state는 백엔드 `uiToken()`이 이미 PRIMARY 등으로 변환해 정합 |
+| **SP1 AIOps** | aibot AI 운영자 접목(감지→조사→제안→승인→실행→보고) | ✅ 완료 | aibot 사이드카(`nemesis_service.py` FastAPI `/health·/ai/chat·/ai/investigate·/ai/execute`, 읽기전용 조사도구 `nemesis_ops_tools.py`, paramiko SSH), Nemesis `domain/aiops`(`AiProposal`+V11, `AiOperatorClient/Service/Properties`, 제안·알림 컨트롤러, RBAC operator+), `FailoverTriggerListener`→`onFault` 비동기 조사, `AiChatController` aibot 프록시+LLM 폴백, 프론트 `AiPanel` 제안카드·`Navbar` 알림벨. 단위테스트 aibot 9 + 백엔드 aiops 8 |
 
 **검증(2026-06-11):**
 - 명령 채널 e2e: 무인증/오인증 401, 비화이트리스트(`rm -rf /`) 403, 인젝션 인자 무해, 허용 스크립트 정상.
 - 피어 하트비트 e2e: `/hb` 응답·`ping_peer` alive/dead 판정 정상.
 - 셸 5종 `sh -n` 통과, 에이전트 `py_compile` 통과, 미사용 컴포넌트 0 참조 확인 후 삭제.
 - ⚠️ **백엔드는 로컬에 JDK/gradle 미설치로 미컴파일.** 변경은 표준 패턴(파생쿼리, JDK 크립토, OncePerRequestFilter)이나 빌드 환경에서 `gradle test` 1회 필요. 신규 테스트: `FailoverOrchestratorTest`(5), 갱신 `HealthMonitorServiceTest`.
+
+**검증(2026-06-21) — SP1 AIOps e2e:**
+- 단위: aibot pytest 9 통과, 백엔드 `gradle test` 44 통과(신규 aiops 8 포함, 기존 회귀 0; 무관한 기존 깨진 테스트 2건 정정).
+- 런타임: 백엔드 컨테이너 재빌드·재기동 시 Flyway V11 적용 확인, `/api/ai/proposals`·`/api/ai/notifications` 200. 실제 감지 `NodeFaultEvent`→`onFault`→aibot 호출→사이드카 불통 시 "제안 생략" 폴백(HA 무영향) 로그 확인.
+- aibot 사이드카: `/health` ok, 무/오토큰 401, `/ai/investigate`가 라이브 백엔드 read API 조회 후 구조화 조치안 JSON 반환. `/api/ai/chat`(admin) aibot→ollama 왕복 응답.
+- 제안 생애주기: PENDING 제안 적재→`notifications.pending=1`→admin 승인→aibot `/ai/execute` 호출→SSH 키 부재로 안전 실패→**FAILED 보고**(decidedBy=admin) 전이 확인.
 
 **검증(2026-06-12):**
 - ① **`gradle test` 통과** — Docker(`gradle:8.7-jdk17`)로 백엔드 최초 컴파일+테스트. 18/18 통과. 1건 수정: `FailoverOrchestratorTest`의 `@BeforeEach` 공용 stub을 `lenient()` 처리(strict-stubbing의 `UnnecessaryStubbingException`, 로직 버그 아님).
@@ -251,4 +258,17 @@
 - 🔴 **버그2 — 에이전트 명령 채널 전체 불통**: Spring 6.1 `SimpleClientHttpRequestFactory`가 Map 바디를 **chunked 스트리밍** 전송 → 파이썬 `BaseHTTPRequestHandler`는 chunked를 못 읽어 빈 바디 400. `AgentCommandClient`가 JSON을 String으로 직렬화해 Content-Length(fixed-length) 전송하도록 수정. **FailoverOrchestrator의 VIP 인수 명령도 동일 경로라 이 수정 전엔 실환경에서 실패했을 핵심 버그.** ⚠️ 기존 §7의 "명령 채널 e2e" 검증은 curl 직접 호출이라 이 버그를 못 잡았음 — Java 클라이언트 경유 e2e 필요.
 - 운영 메모: 에이전트는 코드 갱신 후 **재시작 필요**(구버전 프로세스는 17000/17001 미리스닝). 로컬 개발에서 에이전트가 `--server localhost`로 등록하면 serviceIp가 127.0.0.1로 등록돼 컨테이너 백엔드가 못 닿음 → 노드 serviceIp를 호스트 IP로 설정.
 
-**잔여 작업(후속 권장):** ① 기본 admin 비밀번호 운영 환경 교체. ② 외부 호스트에서 UI 접속 시 `NEMESIS_ALLOWED_ORIGINS`에 해당 origin 추가. ③ 에이전트 자기 IP 감지 개선(127.0.0.1 등록 방지). ④ Java 클라이언트 경유 명령채널 통합테스트 추가. ⑤ E-2 잔여(점검/리포트/알림설정/시스템설정/HA시퀀스·동기화/서비스) 수집 파이프라인.
+**E-2 잔여 페이지 실구현 — ComingSoon 전면 제거(2026-06-13):**
+- 그동안 `ComingSoon` 배너로 막아둔 페이지를 모두 실 데이터 백엔드로 전환. Flyway `V10__ops_pages.sql`(inspections/system_settings/alert_rules/reports/ha_sequences) 추가.
+- **점검 관리**: `inspection` 패키지(Inspection 엔티티+CRUD 컨트롤러), `GET/POST/PUT/DELETE /api/inspection`. 실 DB 영속.
+- **시스템 설정**: `settings` 패키지(SystemSettings 단일행 id=1), `GET/PUT /api/settings/system`. 없으면 기본값 생성.
+- **알람 설정**: `alert` 패키지(AlertRule, 6종 시드), `GET /api/alerts/config`·`PUT /api/alerts/config/{id}`. **DashboardService.getAlerts()가 이 규칙을 단일 소스로 사용** — 토글/임계값 변경이 실제 대시보드 알람 생성에 즉시 반영(disk 알람도 추가). 비활성 규칙은 알람 미생성.
+- **리포트**: `report` 패키지(Report 엔티티+ReportService), `GET /api/reports`·`POST /api/reports`(type별 실데이터 생성: MONTHLY=구성요약, INCIDENT=failover_history, PERFORMANCE=메트릭캐시 평균, SECURITY=VIP노출·노드도달성)·`GET /api/reports/{id}/download`(텍스트 첨부). 프론트 생성 셀렉트+버튼·다운로드 blob 배선.
+- **HA 운영 절차**: `ha` 패키지(HaSequence, jsonb steps), `GET/PUT /api/ha/sequences/{clusterId}`(STARTUP/SHUTDOWN/FAILOVER). Sequence.jsx ComingSoon·RunbookTab `setList(r.data.items)` 버그·clusterId `+` 강제변환(UUID→NaN) 수정.
+- **HA 하트비트 매트릭스**: `HeartbeatCache`(인메모리) + `POST /api/agent/heartbeat`(에이전트 피어 핑 결과 보고) + `GET /api/ha/heartbeat/{clusterId}`(보고값 우선, 없으면 서버 메트릭 신선도 폴백). 에이전트 `measure_peer`/`report_heartbeat` 추가(run_loop에서 매 주기 보고, 추가형).
+- **HA 메타데이터 동기화**: `GET/POST /api/ha/metadata-sync/{clusterId}` — 관리서버가 메타 마스터, 노드 신선=IN_SYNC/오래됨=DIVERGED. POST는 다음 에이전트 폴링 반영 ack.
+- **대시보드 목업 패널 실연결**: `ServiceStatusPanel`(swItems→서비스 행), `RunbookProgressPanel`(/runbook 진행중 항목)을 Dashboard.jsx에서 실 props로 연결(기존엔 항상 빈 상태).
+- ClusterStatus.jsx 하트비트/메타 탭 ComingSoon·clusterId `+` 강제변환 2곳 수정. `ha/Sync.jsx`는 `/monitoring/cluster` 리다이렉트로 미사용(방치).
+- **검증**: Docker `gradle:8.7-jdk17` `compileJava`+`test` 통과(회귀 없음), `vite build` 통과(1858 모듈). ⚠️ 실 PostgreSQL 기동 시 V10 Flyway 적용 + 브라우저 e2e는 후속 권장. 에이전트 하트비트 보고는 실 에이전트 미보유로 코드 리뷰만(추가형이라 미보고 시 폴백 동작).
+
+**잔여 작업(후속 권장):** ① 기본 admin 비밀번호 운영 환경 교체. ② 외부 호스트에서 UI 접속 시 `NEMESIS_ALLOWED_ORIGINS`에 해당 origin 추가. ③ 에이전트 자기 IP 감지 개선(127.0.0.1 등록 방지). ④ Java 클라이언트 경유 명령채널 통합테스트 추가. ⑤ 실 PostgreSQL 기동 후 V10 페이지 브라우저 e2e + 에이전트 하트비트 보고 실측.
