@@ -262,7 +262,7 @@ public class AgentInstallService {
         return false;
     }
 
-    void emit(String jobId, String line) {
+    public void emit(String jobId, String line) {
         logBuffer.computeIfAbsent(jobId, k -> Collections.synchronizedList(new ArrayList<>())).add(line);
         SseEmitter emitter = emitters.get(jobId);
         if (emitter != null) {
