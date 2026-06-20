@@ -50,6 +50,13 @@ nemesis:
     cpu-threshold: ${DETECT_CPU_THRESHOLD:85}
     mem-threshold: ${DETECT_MEM_THRESHOLD:85}
     disk-threshold: ${DETECT_DISK_THRESHOLD:90}
+  aiops:
+    enabled: ${NEMESIS_AIOPS_ENABLED:false}
+    base-url: ${NEMESIS_AIBOT_URL:http://localhost:18900}
+    token: ${NEMESIS_AIBOT_TOKEN:}
+    ssh-user: ${NEMESIS_AIOPS_SSH_USER:root}
+    timeout-seconds: ${NEMESIS_AIOPS_TIMEOUT:120}
+    proposal-ttl-minutes: ${NEMESIS_AIOPS_TTL:30}
 
 logging:
   level:
