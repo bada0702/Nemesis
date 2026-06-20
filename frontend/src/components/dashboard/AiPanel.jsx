@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Cpu, Bot, Send, User } from 'lucide-react'
-import { aiChat } from '../../api/client'
+import { aiChat, getAiProposals, approveAiProposal, rejectAiProposal } from '../../api/client'
+import { useAuth } from '../../auth/AuthContext'
 
 export default function AiPanel({ messages, className = '' }) {
   const [input,    setInput]    = useState('')
@@ -10,6 +11,28 @@ export default function AiPanel({ messages, className = '' }) {
   const bottomRef  = useRef(null)
   const navigate   = useNavigate()
   const list       = messages ?? []
+  const { isOperator } = useAuth()
+  const [proposals, setProposals] = useState([])
+
+  useEffect(() => {
+    let alive = true
+    const load = () => getAiProposals('PENDING')
+      .then(r => { if (alive) setProposals(r.data) }).catch(() => {})
+    load()
+    const id = setInterval(load, 10000)
+    return () => { alive = false; clearInterval(id) }
+  }, [])
+
+  async function decide(id, approve) {
+    try {
+      await (approve ? approveAiProposal(id) : rejectAiProposal(id))
+      setHistory(h => [...h, { role: 'ai', text: `제안 ${approve ? '승인' : '거부'} 처리됨 (${id.slice(0,8)})` }])
+    } catch (e) {
+      setHistory(h => [...h, { role: 'ai', text: '처리 실패: ' + (e.response?.data?.error ?? e.message) }])
+    } finally {
+      getAiProposals('PENDING').then(r => setProposals(r.data)).catch(() => {})
+    }
+  }
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -48,7 +71,7 @@ export default function AiPanel({ messages, className = '' }) {
         <button onClick={() => navigate('/ai-analysis')} className="text-[10px] text-gray-500 hover:text-white py-2.5 px-2 min-h-[44px] flex items-center">더보기 →</button>
       </div>
 
-      <div className="flex-1 bg-black/20 rounded-lg p-4 mb-4 text-xs overflow-y-auto max-h-64 space-y-3">
+      <div className="flex-1 min-h-0 bg-black/20 rounded-lg p-4 mb-4 text-xs overflow-y-auto space-y-3">
         {history.length === 0 && (
           <div className="flex items-start space-x-3">
             <div className="w-6 h-6 rounded bg-blue-500 flex items-center justify-center shrink-0">
@@ -89,6 +112,33 @@ export default function AiPanel({ messages, className = '' }) {
         <div ref={bottomRef} />
       </div>
 
+      {proposals.length > 0 && (
+        <div className="mb-3 space-y-2">
+          {proposals.map(p => (
+            <div key={p.id} className="rounded-lg border border-amber-600/40 bg-amber-500/5 p-3 text-xs">
+              <div className="flex items-center justify-between mb-1">
+                <span className="font-bold text-amber-400">⚠️ AI 조치 제안</span>
+                <span className="text-gray-500">신뢰도 {Math.round((p.confidence ?? 0) * 100)}%</span>
+              </div>
+              <p className="text-gray-300 mb-1">{p.diagnosis}</p>
+              {(p.proposedActions ?? []).map((a, i) => (
+                <div key={i} className="text-gray-400">
+                  • {a.description} <code className="text-blue-300">{a.command}</code>
+                  <span className="ml-1 text-[10px] text-amber-300">[{a.riskLevel}]</span>
+                </div>
+              ))}
+              <div className="flex gap-2 mt-2">
+                <button disabled={!isOperator} onClick={() => decide(p.id, true)}
+                  title={isOperator ? '' : 'operator 이상 권한이 필요합니다'}
+                  className="px-3 py-1 rounded bg-green-600 text-white disabled:opacity-40 disabled:cursor-not-allowed">승인</button>
+                <button disabled={!isOperator} onClick={() => decide(p.id, false)}
+                  title={isOperator ? '' : 'operator 이상 권한이 필요합니다'}
+                  className="px-3 py-1 rounded bg-gray-700 text-gray-200 disabled:opacity-40 disabled:cursor-not-allowed">거부</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
       <div className="relative">
         <input
           value={input}
