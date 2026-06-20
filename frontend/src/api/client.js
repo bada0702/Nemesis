@@ -98,6 +98,13 @@ export const deleteManagedService = (cid, sid)     => client.delete(`/clusters/$
 // AI 채팅
 export const aiChat              = (message)       => client.post('/ai/chat', { message })
 
+// AI 운영자(AIOps) 제안/알림
+export const getAiProposals     = (status)  => client.get('/ai/proposals', { params: status ? { status } : {} })
+export const getAiProposal      = (id)      => client.get(`/ai/proposals/${id}`)
+export const approveAiProposal  = (id)      => client.post(`/ai/proposals/${id}/approve`)
+export const rejectAiProposal   = (id)      => client.post(`/ai/proposals/${id}/reject`)
+export const getAiNotifications = ()        => client.get('/ai/notifications')
+
 // AI 장애 분석
 export const triggerAiAnalysis   = (nodeId)        => client.post(`/ai/analyze/${nodeId}`)
 export const getAiAnalysisResult = (nodeId)        => client.get(`/ai/analysis/${nodeId}`)
