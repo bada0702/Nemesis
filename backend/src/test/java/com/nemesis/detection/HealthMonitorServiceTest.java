@@ -55,18 +55,54 @@ class HealthMonitorServiceTest {
                 .build();
     }
 
+    private Node nodeIn(Cluster c, Node.Role role, OffsetDateTime lastSeen, String host) {
+        return Node.builder()
+                .id(UUID.randomUUID()).cluster(c).hostname(host)
+                .osType(Node.OsType.LINUX).role(role).lastSeenAt(lastSeen).build();
+    }
+
+    private MetricsPushRequest freshMetrics() {
+        MetricsPushRequest m = new MetricsPushRequest();
+        m.setCpuPercent(10.0); m.setMemoryPercent(20.0); m.setDiskPercent(30.0);
+        return m;
+    }
+
     @Test
-    void 무응답_노드는_fault로_전이되고_이벤트가_기록된다() {
-        Node n = node(Node.Role.active, OffsetDateTime.now().minusSeconds(60));
-        when(nodeRepository.findAll()).thenReturn(List.of(n));
+    void 무응답_active는_승격가능_standby가_있으면_fault로_전이되고_페일오버를_트리거한다() {
+        Cluster c = cluster();
+        Node active  = nodeIn(c, Node.Role.active,  OffsetDateTime.now().minusSeconds(60), "m1");
+        Node standby = nodeIn(c, Node.Role.standby, OffsetDateTime.now(),                  "s1");
+        metricsCache.put(standby.getId(), freshMetrics());   // 승격 대상 생존(신선)
+        when(nodeRepository.findAll()).thenReturn(List.of(active));
+        when(nodeRepository.findByClusterId(c.getId())).thenReturn(List.of(active, standby));
 
         monitor.scan();
 
-        assertThat(n.getRole()).isEqualTo(Node.Role.fault);
-        verify(nodeRepository).save(n);
+        assertThat(active.getRole()).isEqualTo(Node.Role.fault);
+        verify(nodeRepository).save(active);
+        verify(eventPublisher).publishEvent(any(NodeFaultEvent.class));
 
         ArgumentCaptor<DetectionEvent> cap = ArgumentCaptor.forClass(DetectionEvent.class);
         verify(eventRepository).save(cap.capture());
+        assertThat(cap.getValue().getType()).isEqualTo(DetectionEvent.Type.NODE_FAULT);
+        assertThat(cap.getValue().getSeverity()).isEqualTo(DetectionEvent.Severity.CRITICAL);
+    }
+
+    @Test
+    void 무응답_active는_승격가능_standby가_없으면_master로_유지된다() {   // 단일-master 강등 버그 회귀 방지
+        Cluster c = cluster();
+        Node active = nodeIn(c, Node.Role.active, OffsetDateTime.now().minusSeconds(60), "m1");
+        when(nodeRepository.findAll()).thenReturn(List.of(active));
+        when(nodeRepository.findByClusterId(c.getId())).thenReturn(List.of(active));   // 페일오버 대상 없음
+
+        monitor.scan();
+
+        assertThat(active.getRole()).isEqualTo(Node.Role.active);   // 강등되지 않음 (master 유지)
+        verify(nodeRepository, never()).save(active);               // role 변경 저장 없음
+        verify(eventPublisher, never()).publishEvent(any());        // 페일오버 트리거 안 함
+
+        ArgumentCaptor<DetectionEvent> cap = ArgumentCaptor.forClass(DetectionEvent.class);
+        verify(eventRepository).save(cap.capture());                // 경보는 1회 기록
         assertThat(cap.getValue().getType()).isEqualTo(DetectionEvent.Type.NODE_FAULT);
         assertThat(cap.getValue().getSeverity()).isEqualTo(DetectionEvent.Severity.CRITICAL);
     }
