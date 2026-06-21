@@ -1,9 +1,12 @@
-import React, { useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import {
   getClusterStatus, updateCluster, getClusterNodes,
   createNode, updateNode, deleteNode,
+  applyClusterVip, downClusterVip, getClusterVipStatus,
 } from '../api/client'
+import { useAuth } from '../auth/AuthContext'
+import ClusterTopologyPanel from '../components/ClusterTopologyPanel'
 
 const OS_TYPES = ['Linux', 'AIX', 'RHEL', 'Ubuntu', 'CentOS']
 const ROLES    = ['PRIMARY', 'STANDBY']
@@ -27,11 +30,13 @@ function Badge({ children, color = 'slate' }) {
 function NodeFormModal({ clusterId, existing, onClose, onSaved }) {
   const isEdit = !!existing
   const [form, setForm] = useState({
-    hostname:  existing?.hostname  ?? '',
-    ipAddress: existing?.ipAddress ?? '',
-    vip:       existing?.vip       ?? '',
-    osType:    existing?.osType    ?? 'Linux',
-    role:      existing?.role      ?? 'STANDBY',
+    hostname:    existing?.hostname    ?? '',
+    ipAddress:   existing?.ipAddress   ?? '',
+    vip:         existing?.vip         ?? '',
+    heartbeatIp: existing?.heartbeatIp ?? '',
+    netIface:    existing?.netIface    ?? '',
+    osType:      existing?.osType      ?? 'Linux',
+    role:        existing?.role        ?? 'STANDBY',
   })
   const [saving, setSaving] = useState(false)
   const [error,  setError]  = useState(null)
@@ -99,6 +104,22 @@ function NodeFormModal({ clusterId, existing, onClose, onSaved }) {
               <input value={form.vip} onChange={e => set('vip', e.target.value)}
                 placeholder="예: 10.0.1.1" className={inputCls} />
               <p className="text-[10px] text-slate-700 mt-1">서비스 Virtual IP</p>
+            </div>
+          </div>
+
+          {/* 내부 하트비트 IP + NIC */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={labelCls}>Heartbeat IP (선택)</label>
+              <input value={form.heartbeatIp} onChange={e => set('heartbeatIp', e.target.value)}
+                placeholder="예: 192.168.50.13" className={inputCls} />
+              <p className="text-[10px] text-slate-700 mt-1">노드 간 사설 하트비트 망 IP</p>
+            </div>
+            <div>
+              <label className={labelCls}>네트워크 카드 (NIC)</label>
+              <input value={form.netIface} onChange={e => set('netIface', e.target.value)}
+                placeholder="예: eth1 / en0" className={inputCls} />
+              <p className="text-[10px] text-slate-700 mt-1">VIP·하트비트를 적용할 인터페이스</p>
             </div>
           </div>
 
@@ -182,6 +203,122 @@ function NodeFormModal({ clusterId, existing, onClose, onSaved }) {
             </button>
           </div>
         </form>
+      </div>
+    </div>
+  )
+}
+
+// ── VIP 실제 적용 상태 패널 ───────────────────────────────────
+function VipStatusPanel({ clusterId, vip }) {
+  const { isOperator } = useAuth()
+  const [status, setStatus]       = useState(null)
+  const [checking, setChecking]   = useState(false)
+  const [applying, setApplying]   = useState(false)
+  const [downing, setDowning]     = useState(false)
+  const [actionResult, setActionResult] = useState(null)
+
+  const check = useCallback(async () => {
+    setChecking(true)
+    try { const r = await getClusterVipStatus(clusterId); setStatus(r.data) }
+    catch { /* ignore */ } finally { setChecking(false) }
+  }, [clusterId])
+
+  useEffect(() => { check() }, [check])
+
+  async function apply() {
+    setApplying(true); setActionResult(null)
+    try {
+      const r = await applyClusterVip(clusterId)
+      setActionResult(r.data.applied
+        ? { ok: true,  msg: 'VIP가 Primary 노드에 적용되었습니다. (ip addr show로 확인)' }
+        : { ok: false, msg: 'VIP 적용 실패 — 노드별 결과를 확인하세요.' })
+      check()
+    } catch (e) {
+      setActionResult({ ok: false, msg: 'VIP 적용 실패: ' + (e.response?.data?.message ?? e.message) })
+    } finally { setApplying(false) }
+  }
+
+  async function down() {
+    setDowning(true); setActionResult(null)
+    try {
+      const r = await downClusterVip(clusterId)
+      setActionResult(r.data.removed
+        ? { ok: true,  msg: '모든 노드에서 VIP가 해제되었습니다 (이중화 중지).' }
+        : { ok: false, msg: 'VIP 해제 실패 — 노드별 결과를 확인하세요.' })
+      check()
+    } catch (e) {
+      setActionResult({ ok: false, msg: 'VIP 해제 실패: ' + (e.response?.data?.message ?? e.message) })
+    } finally { setDowning(false) }
+  }
+
+  if (!vip) return null
+
+  return (
+    <div className="bg-surface-container border border-surface-variant rounded-xl p-5">
+      <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+        <div className="flex items-center gap-2">
+          <span className="material-symbols-outlined text-emerald-400 text-[18px]">lan</span>
+          <h3 className="text-sm font-black text-on-surface font-display">VIP 실제 적용 상태</h3>
+          <span className="text-[11px] font-mono text-slate-500">{vip}</span>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <button onClick={check} disabled={checking}
+            className="flex items-center gap-1.5 text-[11px] font-bold border border-slate-700 text-slate-400 hover:border-slate-600 rounded-lg px-3 py-1.5 transition-all disabled:opacity-50">
+            <span className="material-symbols-outlined text-[13px]">refresh</span>
+            {checking ? '점검 중...' : '상태 점검'}
+          </button>
+          <button onClick={apply} disabled={applying || downing || !isOperator}
+            title={isOperator ? '' : 'operator 이상 권한이 필요합니다'}
+            className="flex items-center gap-1.5 text-[11px] font-bold bg-emerald-600/15 hover:bg-emerald-600/25 border border-emerald-500/30 text-emerald-400 rounded-lg px-3 py-1.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+            <span className="material-symbols-outlined text-[13px]">play_circle</span>
+            {applying ? '적용 중...' : 'VIP 적용'}
+          </button>
+          <button onClick={down} disabled={downing || applying || !isOperator}
+            title={isOperator ? '' : 'operator 이상 권한이 필요합니다'}
+            className="flex items-center gap-1.5 text-[11px] font-bold bg-red-600/15 hover:bg-red-600/25 border border-red-500/30 text-red-400 rounded-lg px-3 py-1.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+            <span className="material-symbols-outlined text-[13px]">stop_circle</span>
+            {downing ? '해제 중...' : 'VIP 중지 (이중화 해제)'}
+          </button>
+        </div>
+      </div>
+
+      <p className="text-[10px] text-slate-600 mb-3">
+        VIP 적용: Primary 노드에 vip-up, 그 외 노드에서 vip-down. 적용 후 <code className="font-mono">ip addr show</code>로 확인하세요.
+        VIP 중지: 모든 노드에서 vip-down 실행 (이중화 해제).
+      </p>
+
+      {actionResult && (
+        <div className={`mb-3 rounded-lg border px-3 py-2 text-[11px] ${actionResult.ok
+          ? 'border-emerald-500/30 bg-emerald-500/5 text-emerald-300'
+          : 'border-red-500/30 bg-red-500/5 text-red-300'}`}>
+          {actionResult.msg}
+        </div>
+      )}
+
+      <div className="flex gap-2 flex-wrap">
+        {(status?.nodes ?? []).map(n => (
+          <div key={n.nodeId}
+            className={`flex items-center gap-2 text-[11px] border rounded-lg px-3 py-2 font-mono
+              ${n.vipPresent === true  ? 'border-emerald-500/30 bg-emerald-500/5' :
+                n.vipPresent === false ? 'border-slate-700 bg-slate-800/30' :
+                                         'border-amber-500/30 bg-amber-500/5'}`}>
+            <span className={
+              n.vipPresent === true  ? 'text-emerald-400' :
+              n.vipPresent === false ? 'text-slate-600' : 'text-amber-400'}>
+              {n.vipPresent === true ? '●' : n.vipPresent === false ? '○' : '?'}
+            </span>
+            <span className="text-slate-300">{n.hostname}</span>
+            <span className="text-slate-600">{n.role}</span>
+            <span className={
+              n.vipPresent === true  ? 'text-emerald-400 font-bold' :
+              n.vipPresent === false ? 'text-slate-600' : 'text-amber-400'}>
+              {n.vipPresent === true ? 'VIP 있음' : n.vipPresent === false ? 'VIP 없음' : '통신 불가'}
+            </span>
+          </div>
+        ))}
+        {status && (status.nodes ?? []).length === 0 && (
+          <p className="text-[11px] text-slate-600">등록된 노드가 없습니다.</p>
+        )}
       </div>
     </div>
   )
@@ -349,7 +486,7 @@ export default function ClusterSettings() {
   const primaryNode = nodes.find(n => n.role === 'PRIMARY')
 
   return (
-    <>
+    <div className="p-8 pt-0 space-y-5">
       {modal && (
         <NodeFormModal
           clusterId={id}
@@ -392,11 +529,6 @@ export default function ClusterSettings() {
             <span className="material-symbols-outlined text-[16px]">arrow_back</span>
             클러스터 상세
           </button>
-          <button onClick={() => navigate(`/cluster/${id}/topology`)}
-            className="flex items-center gap-2 bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/30 text-sky-400 rounded-lg px-4 py-2 text-xs font-bold transition-all">
-            <span className="material-symbols-outlined text-[16px]">account_tree</span>
-            Topology
-          </button>
         </div>
       </div>
 
@@ -404,6 +536,12 @@ export default function ClusterSettings() {
       {cluster && (
         <ClusterInfoPanel cluster={cluster} onUpdated={data => setCluster(c => ({ ...c, ...data }))} />
       )}
+
+      {/* HA 토폴로지 */}
+      <ClusterTopologyPanel clusterId={id} />
+
+      {/* VIP 실제 적용 상태 */}
+      {cluster && <VipStatusPanel clusterId={id} vip={cluster.vip} />}
 
       {/* 노드 관리 */}
       <div>
@@ -459,7 +597,7 @@ export default function ClusterSettings() {
           <DeleteClusterButton clusterId={id} clusterName={cluster?.name} onDeleted={() => navigate('/')} />
         </div>
       </div>
-    </>
+    </div>
   )
 }
 

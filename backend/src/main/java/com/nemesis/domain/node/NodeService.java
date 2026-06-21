@@ -4,6 +4,7 @@ import com.nemesis.cache.MetricsCacheService;
 import com.nemesis.detection.DetectionProperties;
 import com.nemesis.domain.cluster.Cluster;
 import com.nemesis.domain.cluster.ClusterRepository;
+import com.nemesis.domain.cluster.VipService;
 import com.nemesis.dto.ClusterStatusResponse;
 import com.nemesis.dto.MetricsPushRequest;
 import lombok.RequiredArgsConstructor;
@@ -24,6 +25,7 @@ public class NodeService {
     private final ClusterRepository clusterRepository;
     private final MetricsCacheService metricsCache;
     private final DetectionProperties detectionProps;
+    private final VipService vipService;
 
     @Transactional(readOnly = true)
     public List<Node> getNodes(UUID clusterId) {
@@ -64,11 +66,17 @@ public class NodeService {
                 .vip((String) body.get("vip"))
                 .serviceIp((String) body.get("serviceIp"))
                 .heartbeatIp((String) body.get("heartbeatIp"))
+                .netIface((String) body.get("netIface"))
                 .osType(Node.OsType.valueOf(
                         ((String) body.getOrDefault("osType", "LINUX")).toUpperCase()))
                 .role(Node.Role.parse((String) body.getOrDefault("role", "standby")))
                 .build();
-        return nodeRepository.save(node);
+        Node saved = nodeRepository.save(node);
+        // PRIMARY로 등록되면 클러스터 VIP를 OS에 실제 반영(비동기 best-effort)
+        if (saved.getRole() == Node.Role.active && hasVip(cluster)) {
+            vipService.applyAsync(clusterId);
+        }
+        return saved;
     }
 
     @Transactional
@@ -84,8 +92,19 @@ public class NodeService {
         if (body.get("netIface")    != null) node.setNetIface((String) body.get("netIface"));
         if (body.get("osType")      != null) node.setOsType(Node.OsType.valueOf(
                 ((String) body.get("osType")).toUpperCase()));
+        Node.Role before = node.getRole();
         if (body.get("role")        != null) node.setRole(Node.Role.parse((String) body.get("role")));
-        return nodeRepository.save(node);
+        Node saved = nodeRepository.save(node);
+        // STANDBY→PRIMARY 승격 시 VIP를 OS에 실제 반영(비동기 best-effort)
+        if (before != Node.Role.active && saved.getRole() == Node.Role.active
+                && hasVip(saved.getCluster())) {
+            vipService.applyAsync(clusterId);
+        }
+        return saved;
+    }
+
+    private boolean hasVip(Cluster cluster) {
+        return cluster.getVip() != null && !cluster.getVip().isBlank();
     }
 
     @Transactional
@@ -126,14 +145,20 @@ public class NodeService {
                         .networkRxBytesPerSec(m.getNetworkRxBytesPerSec())
                         .networkTxBytesPerSec(m.getNetworkTxBytesPerSec())
                         .timestamp(m.getTimestamp())
+                        .processes(m.getProcesses())
                         .build()
         ).orElse(null);
+
+        String state = metricsCache.isFresh(node.getId(), detectionProps.metricsFreshMillis())
+                ? "RUNNING" : "STOPPED";
 
         return ClusterStatusResponse.NodeStatus.builder()
                 .nodeId(node.getId())
                 .hostname(node.getHostname())
+                .ipAddress(node.getIpAddress())
                 .osType(node.getOsType().name())
                 .role(node.getRole().uiToken())
+                .state(state)
                 .lastSeenAt(node.getLastSeenAt())
                 .metrics(metrics)
                 .build();
