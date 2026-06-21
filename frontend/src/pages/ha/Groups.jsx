@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Server, Zap, RefreshCw, ChevronRight, Bot } from 'lucide-react'
+import { Server, Zap, RefreshCw, Bot, Link2, Unlink } from 'lucide-react'
 import { getClusters, getClusterStatus } from '../../api/client'
 import { statusBadge, dot } from '../../lib/utils'
 
@@ -10,6 +10,8 @@ const ROLE_BADGE = {
   FAULT:      'text-red-400 border-red-500/30 bg-red-500/10',
   RECOVERING: 'text-amber-400 border-amber-500/30 bg-amber-500/10',
 }
+
+const agentUp = n => n?.lastSeenAt != null && (Date.now() - new Date(n.lastSeenAt).getTime()) < 30_000
 
 // 노드 컬럼 카드: 노드 정보(역할·자원) + 그 노드의 서비스 목록 + 에이전트 상태.
 // 이중화 비교를 위해 좌우로 나란히 배치한다.
@@ -42,13 +44,22 @@ function NodeCard({ node }) {
       </div>
 
       {node.metrics && (
-        <div className="mt-3 grid grid-cols-3 gap-1 text-[10px]">
-          {[['CPU', node.metrics.cpuPercent], ['MEM', node.metrics.memoryPercent], ['DISK', node.metrics.diskPercent]].map(([k, v]) => (
-            <div key={k} className="bg-black/20 rounded p-1 text-center">
-              <p className="text-gray-500">{k}</p>
-              <p className="text-white font-bold">{v?.toFixed(0) ?? 0}%</p>
-            </div>
-          ))}
+        <div className="mt-3 space-y-1.5">
+          {[['CPU', node.metrics.cpuPercent], ['MEM', node.metrics.memoryPercent], ['DISK', node.metrics.diskPercent]].map(([k, v]) => {
+            const pct = Math.max(0, Math.min(100, Math.round(v ?? 0)))
+            const col = pct >= 90 ? 'bg-red-500' : pct >= 75 ? 'bg-amber-500' : 'bg-emerald-500'
+            return (
+              <div key={k}>
+                <div className="flex justify-between text-[9px] mb-0.5">
+                  <span className="text-gray-500 font-bold">{k}</span>
+                  <span className="text-gray-300 font-mono">{pct}%</span>
+                </div>
+                <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                  <div className={`h-full rounded-full ${col} transition-all`} style={{ width: `${pct}%` }} />
+                </div>
+              </div>
+            )
+          })}
         </div>
       )}
 
@@ -155,24 +166,32 @@ export default function HaGroups() {
                 {/* 이중화 모습: 노드를 좌우로 나란히, 각 노드 카드 안에 서비스 목록 */}
                 {(c.nodes?.length ?? 0) === 0 ? (
                   <p className="text-xs text-gray-600 py-2">등록된 노드가 없습니다.</p>
-                ) : primary && standby && (c.nodes?.length ?? 0) === 2 ? (
-                  // 정확히 2노드(Active/Standby) — 가운데 동기화 표시로 이중화 강조
-                  <div className="flex items-stretch gap-3">
-                    <div className="flex-1"><NodeCard node={primary} /></div>
-                    <div className="flex flex-col items-center justify-center gap-2 px-1 w-20 shrink-0">
-                      <Zap className={`w-5 h-5 ${hasFault ? 'text-red-400' : 'text-green-400'}`} />
-                      <div className={`text-[10px] font-bold text-center ${hasFault ? 'text-red-400' : 'text-green-400'}`}>
-                        {hasFault ? 'DEGRADED' : 'SYNC OK'}
+                ) : (c.nodes?.length ?? 0) === 2 ? (
+                  // 2노드 이중화 — 가운데에 실시간 동기화 연결(연결/끊김) 표시
+                  (() => {
+                    const a = c.nodes[0], b = c.nodes[1]
+                    const synced = agentUp(a) && agentUp(b) && !hasFault
+                    return (
+                      <div className="flex items-stretch gap-2">
+                        <div className="flex-1"><NodeCard node={a} /></div>
+                        <div className="relative flex flex-col items-center justify-center w-24 shrink-0 px-1">
+                          {/* 노드 간 연결선: 동기화 OK=실선 초록, 끊김=점선 빨강 */}
+                          <div className={`absolute top-1/2 -translate-y-1/2 left-0 right-0 border-t-2 ${synced ? 'border-green-500/40' : 'border-red-500/50 border-dashed'}`} />
+                          <div className="relative z-10 flex flex-col items-center gap-1.5">
+                            <div className={`w-10 h-10 rounded-full flex items-center justify-center border-2 ${synced ? 'border-green-500/50 bg-green-500/10 animate-pulse' : 'border-red-500/50 bg-red-500/10'}`}>
+                              {synced ? <Link2 className="w-4 h-4 text-green-400" /> : <Unlink className="w-4 h-4 text-red-400" />}
+                            </div>
+                            <span className={`text-[9px] font-bold text-center leading-tight whitespace-pre-line ${synced ? 'text-green-400' : 'text-red-400'}`}>
+                              {synced ? '실시간\n동기화' : '동기화\n끊김'}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex-1"><NodeCard node={b} /></div>
                       </div>
-                      <div className="w-full h-1 bg-gray-800 rounded-full overflow-hidden">
-                        <div className={`h-full rounded-full ${hasFault ? 'bg-red-500' : 'bg-green-500 animate-pulse'}`} style={{ width: hasFault ? '30%' : '100%' }} />
-                      </div>
-                      <p className="text-[8px] text-gray-600">Active/Standby</p>
-                    </div>
-                    <div className="flex-1"><NodeCard node={standby} /></div>
-                  </div>
+                    )
+                  })()
                 ) : (
-                  // 그 외(노드 수 ≠ 2) — 노드들을 좌우 그리드로 나란히
+                  // 1개 또는 3개+ 노드 — 좌우 그리드로 나란히
                   <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
                     {c.nodes.map(n => <NodeCard key={n.nodeId} node={n} />)}
                   </div>
