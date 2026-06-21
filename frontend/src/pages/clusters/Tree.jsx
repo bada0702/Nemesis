@@ -53,9 +53,15 @@ function ServiceRow({ app }) {
 // ── 노드 행 + 자식(서비스 + 에이전트) ─────────────────────────
 function NodeBranch({ node, clusterId, open, onToggle, onOpenNode }) {
   const t        = TONE[nodeTone(node.role, node.state)]
-  const apps     = node.apps ?? []
+  // 서비스 목록: 백엔드 status 응답은 node.apps를 채우지 않고 에이전트가 보고한
+  // 프로세스를 metrics.processes({name,pid,status})로 싣는다. 이를 서비스 행으로 매핑한다.
+  const apps     = node.apps ?? (node.metrics?.processes ?? []).map((p, i) => ({
+    id:    p.pid ?? `${node.nodeId}-${p.name ?? i}`,
+    name:  p.name ?? 'unknown',
+    state: p.status ?? 'running',
+  }))
   const running  = apps.filter(a => a.state === 'running').length
-  const agentUp  = node.state === 'RUNNING'
+  const agentUp  = node.lastSeenAt != null && (Date.now() - new Date(node.lastSeenAt).getTime()) < 30_000
 
   return (
     <div>
