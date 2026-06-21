@@ -119,15 +119,15 @@ export default function Dashboard() {
     setAlerts([])
   }
 
-  // 진행 중 작업 패널: Runbook + 점검(Inspection)의 진행/예약 항목을 합쳐 표시
-  const INSPECT_PROGRESS = { SCHEDULED: 0, IN_PROGRESS: 50, COMPLETED: 100 }
+  // 진행 중 작업 패널: Runbook + 점검(Inspection)의 진행/예약 항목을 합쳐 표시.
+  // 점검 진행률은 백엔드가 시작~종료 시각 기준으로 계산한 progress를 그대로 쓴다.
   const taskItems = [
     ...runbooks
       .filter(r => r.status === 'IN_PROGRESS')
       .map(r => ({ kind: 'Runbook', name: r.title, status: r.status, progress: r.progress ?? 0 })),
     ...inspections
       .filter(i => i.status === 'IN_PROGRESS' || i.status === 'SCHEDULED')
-      .map(i => ({ kind: '점검', name: i.title, status: i.status, progress: INSPECT_PROGRESS[i.status] ?? 0 })),
+      .map(i => ({ kind: '점검', name: i.title, status: i.status, progress: i.progress ?? 0 })),
   ].slice(0, 6)
 
   const haTotal   = summary?.clusterCount ?? 0

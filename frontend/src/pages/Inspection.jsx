@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { ClipboardCheck, Plus, RefreshCw, Trash2, Edit2 } from 'lucide-react'
 import { getInspections, createInspection, updateInspection, deleteInspection } from '../api/client'
-import ComingSoon from '../components/ComingSoon'
 import { statusBadge, fmt } from '../lib/utils'
 
 const TYPE_LABELS = { REGULAR: '정기', EMERGENCY: '긴급', SPECIAL: '특별' }
@@ -9,7 +8,9 @@ const STATUS_OPTS = ['SCHEDULED', 'IN_PROGRESS', 'COMPLETED']
 
 function Modal({ initial, onClose, onSaved }) {
   const editing = !!initial
-  const [form, setForm] = useState(initial ?? { title: '', target: 'prod-cluster-01', type: 'REGULAR', date: '', inspector: '', notes: '', status: 'SCHEDULED' })
+  const [form, setForm] = useState(initial
+    ? { ...initial, startTime: (initial.startTime || '').slice(0, 16), endTime: (initial.endTime || '').slice(0, 16) }
+    : { title: '', target: 'prod-cluster-01', type: 'REGULAR', date: '', inspector: '', notes: '', status: 'SCHEDULED', startTime: '', endTime: '' })
   const [saving, setSaving] = useState(false)
 
   async function submit(e) {
@@ -55,6 +56,20 @@ function Modal({ initial, onClose, onSaved }) {
               </select>
             </div>
           </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[10px] text-gray-500 uppercase mb-1">시작 시간</label>
+              <input type="datetime-local" value={form.startTime ?? ''}
+                onChange={e => setForm(f => ({ ...f, startTime: e.target.value }))}
+                className="w-full px-3 py-2 rounded-lg text-xs bg-gray-900 border border-gray-700 text-white outline-none" />
+            </div>
+            <div>
+              <label className="block text-[10px] text-gray-500 uppercase mb-1">종료 시간</label>
+              <input type="datetime-local" value={form.endTime ?? ''}
+                onChange={e => setForm(f => ({ ...f, endTime: e.target.value }))}
+                className="w-full px-3 py-2 rounded-lg text-xs bg-gray-900 border border-gray-700 text-white outline-none" />
+            </div>
+          </div>
           <div>
             <label className="block text-[10px] text-gray-500 uppercase mb-1">비고</label>
             <textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} rows={2}
@@ -93,7 +108,6 @@ export default function Inspection() {
 
   return (
     <div className="p-8 pt-0 space-y-6">
-      <ComingSoon feature="정기 점검 관리" />
       {modal && (
         <Modal initial={modal === 'new' ? null : modal}
           onClose={() => setModal(null)}
@@ -128,16 +142,16 @@ export default function Inspection() {
         <table className="w-full text-xs">
           <thead className="border-b border-gray-800">
             <tr className="text-gray-500 uppercase">
-              {['제목','대상','유형','상태','점검일','점검자','비고',''].map(h => (
+              {['제목','대상','유형','상태','진행률','점검일','점검자','비고',''].map(h => (
                 <th key={h} className="text-left py-3 px-4 font-medium">{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {loading && items.length === 0
-              ? <tr><td colSpan="8" className="text-center py-12 text-gray-500">로딩 중...</td></tr>
+              ? <tr><td colSpan="9" className="text-center py-12 text-gray-500">로딩 중...</td></tr>
               : !loading && items.length === 0
-              ? <tr><td colSpan="8" className="py-16">
+              ? <tr><td colSpan="9" className="py-16">
                   <div className="flex flex-col items-center gap-3 text-gray-500">
                     <ClipboardCheck className="w-10 h-10 opacity-30" />
                     <p className="text-sm font-medium">등록된 점검 일정이 없습니다.</p>
@@ -161,6 +175,14 @@ export default function Inspection() {
                     </span>
                   </td>
                   <td className="py-3 px-4"><span className={statusBadge(item.status)}>{item.status}</span></td>
+                  <td className="py-3 px-4">
+                    <div className="flex items-center gap-2">
+                      <div className="w-16 h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                        <div className="h-full bg-blue-500 rounded-full" style={{ width: `${item.progress ?? 0}%` }} />
+                      </div>
+                      <span className="text-[10px] text-gray-400 font-mono">{item.progress ?? 0}%</span>
+                    </div>
+                  </td>
                   <td className="py-3 px-4 text-gray-400">{item.date}</td>
                   <td className="py-3 px-4 text-gray-400">{item.inspector}</td>
                   <td className="py-3 px-4 text-gray-500 max-w-[160px] truncate">{item.notes || '—'}</td>
