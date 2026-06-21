@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react'
 import {
   getClusters, getClusterStatus, getClusterVipStatus,
   getDashboardSummary, getDashboardSwStatus, getDashboardAlerts,
-  getDashboardDocker, getRunbook,
+  getDashboardDocker, getRunbook, getInspections,
 } from '../api/client'
 import { OverallStatusCard, CountCard } from '../components/dashboard/StatusCards'
 import SyncStatusPanel       from '../components/dashboard/SyncStatusPanel'
@@ -43,18 +43,20 @@ export default function Dashboard() {
   const [swItems, setSwItems] = useState([])
   const [alerts,  setAlerts]  = useState(loadAlarmLog)
   const [docker,  setDocker]  = useState([])
-  const [runbook, setRunbook] = useState(null)
+  const [runbooks, setRunbooks]       = useState([])
+  const [inspections, setInspections] = useState([])
   const [loading, setLoading] = useState(true)
 
   const load = useCallback(async () => {
     try {
-      const [listRes, sumRes, swRes, alRes, dkRes, rbRes] = await Promise.allSettled([
+      const [listRes, sumRes, swRes, alRes, dkRes, rbRes, inRes] = await Promise.allSettled([
         getClusters(),
         getDashboardSummary(),
         getDashboardSwStatus(),
         getDashboardAlerts(),
         getDashboardDocker(),
         getRunbook(),
+        getInspections(),
       ])
 
       if (listRes.status === 'fulfilled') {
@@ -88,11 +90,8 @@ export default function Dashboard() {
       if (swRes.status  === 'fulfilled') setSwItems(swRes.value.data.items ?? [])
       if (alRes.status  === 'fulfilled') setAlerts(prev => mergeAlarms(prev, alRes.value.data.items ?? []))
       if (dkRes.status  === 'fulfilled') setDocker(dkRes.value.data.nodes ?? [])
-      if (rbRes.status  === 'fulfilled') {
-        const list = rbRes.value.data.items ?? []
-        // 진행 중 Runbook 우선, 없으면 가장 최근 항목
-        setRunbook(list.find(r => r.status === 'IN_PROGRESS') ?? list[0] ?? null)
-      }
+      if (rbRes.status  === 'fulfilled') setRunbooks(rbRes.value.data.items ?? [])
+      if (inRes.status  === 'fulfilled') setInspections(inRes.value.data.items ?? [])
     } finally {
       setLoading(false)
     }
@@ -120,10 +119,16 @@ export default function Dashboard() {
     setAlerts([])
   }
 
-  // 진행 중 작업 패널: Runbook을 {name, status, progress}로 변환
-  const runbookItem = runbook
-    ? { name: runbook.title, status: runbook.status, progress: runbook.progress ?? 0 }
-    : null
+  // 진행 중 작업 패널: Runbook + 점검(Inspection)의 진행/예약 항목을 합쳐 표시
+  const INSPECT_PROGRESS = { SCHEDULED: 0, IN_PROGRESS: 50, COMPLETED: 100 }
+  const taskItems = [
+    ...runbooks
+      .filter(r => r.status === 'IN_PROGRESS')
+      .map(r => ({ kind: 'Runbook', name: r.title, status: r.status, progress: r.progress ?? 0 })),
+    ...inspections
+      .filter(i => i.status === 'IN_PROGRESS' || i.status === 'SCHEDULED')
+      .map(i => ({ kind: '점검', name: i.title, status: i.status, progress: INSPECT_PROGRESS[i.status] ?? 0 })),
+  ].slice(0, 6)
 
   const haTotal   = summary?.clusterCount ?? 0
   const haOk      = agents.filter(a => !a.failoverEvent && !a.nodes?.some(n=>n.role==='FAULT')).length
@@ -219,7 +224,7 @@ export default function Dashboard() {
             <SwPanel items={swItems.filter(i => i.type !== 'DB')} />
             <DockerPanel nodes={docker} />
           </div>
-          <RunbookProgressPanel item={runbookItem} />
+          <RunbookProgressPanel items={taskItems} />
         </div>
         <AiPanel className="xl:col-span-4 h-full" />
       </div>
