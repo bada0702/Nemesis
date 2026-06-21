@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Server, Zap, RefreshCw, Bot, WifiOff } from 'lucide-react'
-import { getClusters, getClusterStatus } from '../../api/client'
+import { getClusters, getClusterStatus, triggerFailover } from '../../api/client'
+import { useAuth } from '../../auth/AuthContext'
 import { statusBadge, dot } from '../../lib/utils'
 
 const ROLE_BADGE = {
@@ -97,7 +98,29 @@ function NodeCard({ node }) {
 export default function HaGroups() {
   const [clusters, setClusters] = useState([])
   const [loading, setLoading]   = useState(true)
+  const [failing, setFailing]   = useState(null)   // 진행 중인 clusterId
   const navigate = useNavigate()
+  const { isOperator } = useAuth()
+
+  // 실제 수동 Failover 실행(상세 페이지 이동이 아님). 승격 가능한 standby 필요.
+  async function doFailover(c) {
+    const primary = c.nodes?.find(n => n.role === 'PRIMARY')
+    const standby = c.nodes?.find(n => n.role === 'STANDBY')
+    if (!standby) { alert('승격 가능한 standby 노드가 없어 Failover를 실행할 수 없습니다.'); return }
+    if (!window.confirm(`${c.clusterName} 수동 Failover를 실행하시겠습니까?\n${primary?.hostname ?? '?'} → ${standby.hostname}`)) return
+    setFailing(c.clusterId)
+    try {
+      const res = await triggerFailover(c.clusterId, {
+        fromNodeId: primary?.nodeId, toNodeId: standby.nodeId, toHostname: standby.hostname,
+      })
+      const d = res?.data ?? {}
+      if (d.success === false) alert(`Failover 불가 (${d.status ?? 'SKIPPED'}): ${d.message ?? '알 수 없는 이유'}`)
+      else alert(`Failover 완료: 새 Primary = ${d.newPrimary ?? standby.hostname}`)
+      await load()
+    } catch (e) {
+      alert('Failover 실행 실패: ' + (e?.response?.data?.message ?? e.message))
+    } finally { setFailing(null) }
+  }
 
   async function load() {
     setLoading(true)
@@ -160,10 +183,17 @@ export default function HaGroups() {
                       className="text-xs px-3 py-1.5 rounded-lg border border-gray-700 text-gray-400 hover:text-white hover:border-gray-600">
                       상세 보기
                     </button>
-                    <button onClick={() => navigate(`/cluster/${c.clusterId}`)}
-                      className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg bg-blue-600/10 border border-blue-600/30 text-blue-400 hover:bg-blue-600/20">
-                      <Zap className="w-3 h-3" /> Failover
-                    </button>
+                    {(() => {
+                      const standby = c.nodes?.find(n => n.role === 'STANDBY')
+                      const disabled = !isOperator || !standby || failing === c.clusterId
+                      return (
+                        <button onClick={() => doFailover(c)} disabled={disabled}
+                          title={!isOperator ? 'operator 이상 권한이 필요합니다' : !standby ? '승격 가능한 standby 노드가 없습니다' : ''}
+                          className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg bg-blue-600/10 border border-blue-600/30 text-blue-400 hover:bg-blue-600/20 disabled:opacity-40 disabled:cursor-not-allowed">
+                          <Zap className="w-3 h-3" /> {failing === c.clusterId ? '실행 중...' : 'Failover'}
+                        </button>
+                      )
+                    })()}
                   </div>
                 </div>
 
