@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react'
 import { Bell, HelpCircle, User, Menu, LogOut } from 'lucide-react'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth, roleLabel } from '../auth/AuthContext'
 import { getAiNotifications } from '../api/client'
 
 const PAGE_TITLES = {
   '/':                     { title: '대시보드',      sub: '전체 시스템의 상태를 한눈에 확인합니다.' },
+  '/help':                 { title: '도움말',        sub: 'NEMESIS 사용 방법과 주요 기능 안내.' },
   '/clusters/tree':        { title: '트리 뷰',       sub: '클러스터 구성을 트리 형태로 확인합니다.' },
   '/ha/groups':            { title: '클러스터 목록', sub: '등록된 HA 클러스터를 관리합니다.' },
   '/settings/clusters':    { title: '클러스터 설정', sub: 'VIP·노드·Failover 정책을 설정합니다.' },
@@ -42,6 +43,7 @@ export default function Navbar({ onMenuToggle }) {
     return () => { alive = false; clearInterval(id) }
   }, [])
 
+  const navigate = useNavigate()
   const page = PAGE_TITLES[location.pathname + location.search]
     ?? PAGE_TITLES[location.pathname]
     ?? { title: 'NEMESIS', sub: '' }
@@ -99,7 +101,9 @@ export default function Navbar({ onMenuToggle }) {
               </div>
             )}
           </div>
-          <HelpCircle className="w-5 h-5 text-gray-400" />
+          <button onClick={() => navigate('/help')} className="p-1" aria-label="도움말" title="도움말">
+            <HelpCircle className="w-5 h-5 text-gray-400 hover:text-white transition-colors" />
+          </button>
           <div className="flex items-center space-x-2">
             <div className="w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center">
               <User className="w-5 h-5 text-gray-300" />
