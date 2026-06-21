@@ -11,50 +11,70 @@ const ROLE_BADGE = {
   RECOVERING: 'text-amber-400 border-amber-500/30 bg-amber-500/10',
 }
 
-// 노드 + 그 노드의 트리뷰 내용(서비스 목록 + 에이전트 상태)
-function NodeTreeRow({ node }) {
-  const [open, setOpen] = useState(true)
+// 노드 컬럼 카드: 노드 정보(역할·자원) + 그 노드의 서비스 목록 + 에이전트 상태.
+// 이중화 비교를 위해 좌우로 나란히 배치한다.
+function NodeCard({ node }) {
   const procs   = node.metrics?.processes ?? []
   const running = procs.filter(p => p.status === 'running').length
   const agentUp = node.lastSeenAt != null && (Date.now() - new Date(node.lastSeenAt).getTime()) < 30_000
-  const toneIcon = node.state === 'STOPPED' || node.role === 'FAULT' ? 'text-red-400'
+  const down    = node.state === 'STOPPED' || node.role === 'FAULT'
+  const toneIcon = down ? 'text-red-400'
     : node.role === 'PRIMARY' ? 'text-sky-400'
     : node.role === 'RECOVERING' ? 'text-amber-400' : 'text-emerald-400'
+  const cardCls = node.role === 'PRIMARY' ? 'bg-sky-900/15 border-sky-500/30'
+    : down ? 'bg-red-900/10 border-red-500/30' : 'bg-gray-800/40 border-gray-700'
 
   return (
-    <div className="border border-gray-800 rounded-lg overflow-hidden">
-      <div className="flex items-center gap-2 px-4 py-2.5 cursor-pointer hover:bg-white/[0.03]" onClick={() => setOpen(o => !o)}>
-        <ChevronRight className={`w-4 h-4 text-gray-600 transition-transform ${open ? 'rotate-90' : ''}`} />
-        <Server className={`w-4 h-4 ${toneIcon}`} />
-        <span className="text-sm font-bold text-white">{node.hostname ?? '—'}</span>
-        <span className={`text-[9px] font-bold border rounded px-1.5 py-0.5 ${ROLE_BADGE[node.role] ?? 'text-gray-400 border-gray-700'}`}>
+    <div className={`rounded-xl p-4 border ${cardCls}`}>
+      <div className="flex items-center justify-between mb-2">
+        <span className={`text-[10px] font-bold border rounded px-1.5 py-0.5 ${ROLE_BADGE[node.role] ?? 'text-gray-400 border-gray-700'}`}>
           {node.role ?? '-'}
         </span>
-        <span className="text-[10px] text-gray-600 font-mono">{node.ipAddress ?? '—'}</span>
-        <span className="ml-auto text-[10px] text-gray-500 font-mono">서비스 {running}/{procs.length}</span>
+        <span className="text-[10px] text-gray-500 font-mono">서비스 {running}/{procs.length}</span>
       </div>
-      {open && (
-        <div className="border-t border-gray-800/60 divide-y divide-gray-800/30 bg-black/10">
+
+      <div className="flex items-center gap-2.5">
+        <Server className={`w-8 h-8 ${toneIcon}`} />
+        <div>
+          <p className="text-sm font-bold text-white">{node.hostname ?? '—'}</p>
+          <p className="text-[11px] text-gray-500 font-mono">{node.ipAddress ?? ''}</p>
+        </div>
+      </div>
+
+      {node.metrics && (
+        <div className="mt-3 grid grid-cols-3 gap-1 text-[10px]">
+          {[['CPU', node.metrics.cpuPercent], ['MEM', node.metrics.memoryPercent], ['DISK', node.metrics.diskPercent]].map(([k, v]) => (
+            <div key={k} className="bg-black/20 rounded p-1 text-center">
+              <p className="text-gray-500">{k}</p>
+              <p className="text-white font-bold">{v?.toFixed(0) ?? 0}%</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="mt-3 border-t border-gray-700/40 pt-2">
+        <p className="text-[9px] uppercase tracking-widest text-gray-600 mb-1.5">보호 대상 서비스</p>
+        <div className="space-y-1 max-h-56 overflow-y-auto">
           {procs.length === 0 ? (
-            <p className="text-[11px] text-gray-600 pl-9 py-2">서비스 없음</p>
+            <p className="text-[11px] text-gray-600 py-1">서비스 없음</p>
           ) : procs.map((p, i) => (
-            <div key={`${p.name}-${i}`} className="flex items-center gap-2 pl-9 pr-4 py-1.5">
-              <span className={`w-1.5 h-1.5 rounded-full ${p.status === 'running' ? 'bg-emerald-400' : 'bg-red-400'}`} />
-              <span className="text-[12px] text-gray-300">{p.name}</span>
+            <div key={`${p.name}-${i}`} className="flex items-center gap-2">
+              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${p.status === 'running' ? 'bg-emerald-400' : 'bg-red-400'}`} />
+              <span className="text-[12px] text-gray-300 truncate">{p.name}</span>
               <span className={`ml-auto text-[10px] font-mono font-bold ${p.status === 'running' ? 'text-emerald-400' : 'text-red-400'}`}>
-                {p.status ?? 'unknown'}
+                {p.status ?? '—'}
               </span>
             </div>
           ))}
-          <div className="flex items-center gap-2 pl-9 pr-4 py-1.5">
-            <Bot className="w-3.5 h-3.5 text-indigo-400/70" />
+          <div className="flex items-center gap-2 border-t border-gray-800/50 pt-1.5 mt-1">
+            <Bot className="w-3.5 h-3.5 text-indigo-400/70 shrink-0" />
             <span className="text-[12px] text-gray-400">Nemesis Agent</span>
             <span className={`ml-auto text-[10px] font-mono font-bold ${agentUp ? 'text-emerald-400' : 'text-red-400'}`}>
               {agentUp ? 'connected' : 'offline'}
             </span>
           </div>
         </div>
-      )}
+      </div>
     </div>
   )
 }
@@ -132,25 +152,31 @@ export default function HaGroups() {
                   </div>
                 </div>
 
-                {/* 동기화 상태 바 */}
-                <div className="flex items-center gap-3 mb-4">
-                  <div className={`text-xs font-bold ${hasFault ? 'text-red-400' : 'text-green-400'}`}>
-                    {hasFault ? '⚠ DEGRADED' : '✓ SYNC OK'}
+                {/* 이중화 모습: 노드를 좌우로 나란히, 각 노드 카드 안에 서비스 목록 */}
+                {(c.nodes?.length ?? 0) === 0 ? (
+                  <p className="text-xs text-gray-600 py-2">등록된 노드가 없습니다.</p>
+                ) : primary && standby && (c.nodes?.length ?? 0) === 2 ? (
+                  // 정확히 2노드(Active/Standby) — 가운데 동기화 표시로 이중화 강조
+                  <div className="flex items-stretch gap-3">
+                    <div className="flex-1"><NodeCard node={primary} /></div>
+                    <div className="flex flex-col items-center justify-center gap-2 px-1 w-20 shrink-0">
+                      <Zap className={`w-5 h-5 ${hasFault ? 'text-red-400' : 'text-green-400'}`} />
+                      <div className={`text-[10px] font-bold text-center ${hasFault ? 'text-red-400' : 'text-green-400'}`}>
+                        {hasFault ? 'DEGRADED' : 'SYNC OK'}
+                      </div>
+                      <div className="w-full h-1 bg-gray-800 rounded-full overflow-hidden">
+                        <div className={`h-full rounded-full ${hasFault ? 'bg-red-500' : 'bg-green-500 animate-pulse'}`} style={{ width: hasFault ? '30%' : '100%' }} />
+                      </div>
+                      <p className="text-[8px] text-gray-600">Active/Standby</p>
+                    </div>
+                    <div className="flex-1"><NodeCard node={standby} /></div>
                   </div>
-                  <div className="flex-1 h-1.5 bg-gray-800 rounded-full overflow-hidden">
-                    <div className={`h-full rounded-full ${hasFault ? 'bg-red-500' : 'bg-green-500 animate-pulse'}`} style={{ width: hasFault ? '30%' : '100%' }} />
+                ) : (
+                  // 그 외(노드 수 ≠ 2) — 노드들을 좌우 그리드로 나란히
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                    {c.nodes.map(n => <NodeCard key={n.nodeId} node={n} />)}
                   </div>
-                  <p className="text-[10px] text-gray-600">Active / Standby</p>
-                </div>
-
-                {/* 노드별 트리 — 각 노드 밑에 서비스/에이전트 */}
-                <div className="space-y-2">
-                  {(c.nodes?.length ?? 0) === 0 ? (
-                    <p className="text-xs text-gray-600 py-2">등록된 노드가 없습니다.</p>
-                  ) : (
-                    c.nodes.map(n => <NodeTreeRow key={n.nodeId} node={n} />)
-                  )}
-                </div>
+                )}
               </div>
             )
           })}
