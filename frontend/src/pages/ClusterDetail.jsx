@@ -315,10 +315,6 @@ export default function ClusterDetail() {
             <p className="text-[9px] text-gray-500 uppercase tracking-widest">Primary</p>
             <p className="text-sm font-bold text-blue-400">{primary?.hostname ?? '—'}</p>
           </div>
-          <button onClick={() => navigate(`/cluster/${id}/topology`)}
-            className="flex items-center gap-2 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 text-blue-400 rounded-lg px-4 py-2 text-xs font-bold">
-            <Network className="w-3.5 h-3.5" /> Topology
-          </button>
           <button onClick={() => setFailoverOpen(v => !v)}
             disabled={!isOperator}
             title={isOperator ? '' : 'operator 이상 권한이 필요합니다'}
