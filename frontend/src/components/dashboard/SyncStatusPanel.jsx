@@ -3,11 +3,21 @@ import { Server, CheckCircle2, Zap } from 'lucide-react'
 import { triggerFailover } from '../../api/client'
 import { useAuth } from '../../auth/AuthContext'
 
-function MetricRow({ label, value }) {
+// 서버 자원 사용량을 프로그래스 바로 표시(실시간). 70%/90% 임계로 색상 변경.
+function MetricBar({ label, pct }) {
+  const v = Math.max(0, Math.min(100, Math.round(Number(pct) || 0)))
+  const bar = v >= 90 ? 'bg-red-500' : v >= 70 ? 'bg-amber-400' : 'bg-green-500'
+  const txt = v >= 90 ? 'status-red' : v >= 70 ? 'status-orange' : 'text-gray-200'
   return (
-    <div className="flex justify-between border-b border-gray-800 pb-1">
-      <span className="text-gray-500 uppercase">{label}</span>
-      <span className="text-white font-medium">{value}</span>
+    <div>
+      <div className="flex justify-between mb-1">
+        <span className="text-gray-500 uppercase">{label}</span>
+        <span className={`font-medium ${txt}`}>{v}%</span>
+      </div>
+      <div className="w-full h-1.5 bg-gray-800 rounded-full overflow-hidden">
+        <div className={`h-full rounded-full ${bar} transition-all duration-500`}
+          style={{ width: `${v}%` }} />
+      </div>
     </div>
   )
 }
@@ -36,14 +46,23 @@ export default function SyncStatusPanel({ agents = [], onRefresh }) {
   const syncOk = !agent.failoverEvent && primary && standby
 
   async function handleFailover() {
-    if (!window.confirm(`${agent.clusterName} 수동 Failover를 실행하시겠습니까?`)) return
+    if (!standby) { alert('승격 가능한 standby 노드가 없어 수동 전환을 할 수 없습니다.'); return }
+    if (!window.confirm(`${agent.clusterName} 수동 Failover를 실행하시겠습니까?\n${primary?.hostname ?? '?'} → ${standby?.hostname}`)) return
     setDoing(true)
     try {
-      await triggerFailover(agent.clusterId, {
+      const res = await triggerFailover(agent.clusterId, {
         fromNodeId: primary?.nodeId,
         toNodeId: standby?.nodeId,
         toHostname: standby?.hostname,
       })
+      // 백엔드는 실패/보류도 HTTP 200 + {success:false, status, message}로 응답한다.
+      // 응답 본문을 확인해 결과를 알려준다(조용한 무반응 방지).
+      const d = res?.data ?? {}
+      if (d.success === false) {
+        alert(`Failover 불가 (${d.status ?? 'SKIPPED'}): ${d.message ?? '알 수 없는 이유'}`)
+      } else {
+        alert(`Failover 완료: 새 Primary = ${d.newPrimary ?? standby?.hostname}`)
+      }
       onRefresh?.()
     } catch (e) {
       alert('Failover 실행 실패: ' + (e?.response?.data?.message ?? e.message))
@@ -97,14 +116,22 @@ export default function SyncStatusPanel({ agents = [], onRefresh }) {
             <span className="text-sm font-bold text-white">실시간 동기화</span>
             <CheckCircle2 className={`w-4 h-4 ${syncOk ? 'status-green' : 'status-red'}`} />
           </div>
-          <div className="w-full h-2 bg-gray-800 rounded-full flex overflow-hidden">
-            <div className={`h-full rounded-full ${syncOk ? 'bg-green-500/80 animate-pulse' : 'bg-red-500/80'}`}
-              style={{ width: syncOk ? '100%' : '30%' }} />
+          <div className="w-full h-2 bg-gray-800 rounded-full overflow-hidden relative">
+            {syncOk ? (
+              <>
+                {/* 연결 유지 표시용 옅은 베이스 + 흐르는 로딩 세그먼트 */}
+                <div className="absolute inset-0 bg-green-500/15 rounded-full" />
+                <div className="sync-bar-fill" />
+              </>
+            ) : (
+              <div className="h-full rounded-full bg-red-500/80" style={{ width: '30%' }} />
+            )}
           </div>
           {syncOk && (
             <div className="flex justify-center mt-2 space-x-1">
               {[...Array(5)].map((_, i) => (
-                <div key={i} className="w-1 h-1 bg-green-500 rounded-full" />
+                <div key={i} className="w-1 h-1 bg-green-500 rounded-full animate-pulse"
+                  style={{ animationDelay: `${i * 150}ms` }} />
               ))}
             </div>
           )}
@@ -125,10 +152,10 @@ export default function SyncStatusPanel({ agents = [], onRefresh }) {
 
       {/* Metrics table */}
       <div className="grid grid-cols-3 gap-8">
-        <div className="space-y-2 text-xs">
-          <MetricRow label="CPU"  value={`${pm.cpuPercent?.toFixed(0) ?? 0}%`} />
-          <MetricRow label="MEM"  value={`${pm.memoryPercent?.toFixed(0) ?? 0}%`} />
-          <MetricRow label="DISK" value={`${pm.diskPercent?.toFixed(0) ?? 0}%`} />
+        <div className="space-y-3 text-xs">
+          <MetricBar label="CPU"  pct={pm.cpuPercent} />
+          <MetricBar label="MEM"  pct={pm.memoryPercent} />
+          <MetricBar label="DISK" pct={pm.diskPercent} />
         </div>
         <div className="space-y-2 text-xs px-4">
           <div className="flex justify-between border-b border-gray-800 pb-1">
@@ -150,10 +177,10 @@ export default function SyncStatusPanel({ agents = [], onRefresh }) {
             </span>
           </div>
         </div>
-        <div className="space-y-2 text-xs">
-          <MetricRow label="CPU"  value={`${sm.cpuPercent?.toFixed(0) ?? 0}%`} />
-          <MetricRow label="MEM"  value={`${sm.memoryPercent?.toFixed(0) ?? 0}%`} />
-          <MetricRow label="DISK" value={`${sm.diskPercent?.toFixed(0) ?? 0}%`} />
+        <div className="space-y-3 text-xs">
+          <MetricBar label="CPU"  pct={sm.cpuPercent} />
+          <MetricBar label="MEM"  pct={sm.memoryPercent} />
+          <MetricBar label="DISK" pct={sm.diskPercent} />
         </div>
       </div>
 
@@ -165,7 +192,9 @@ export default function SyncStatusPanel({ agents = [], onRefresh }) {
             <div className="flex items-center space-x-2">
               <span className="text-sm font-bold text-white">{agent.vip || '—'}</span>
               {agent.vip && (
-                <span className="bg-green-500/20 text-green-400 text-[10px] px-1.5 py-0.5 rounded font-bold">ACTIVE</span>
+                agent.vipActive
+                  ? <span className="bg-green-500/20 text-green-400 text-[10px] px-1.5 py-0.5 rounded font-bold">ACTIVE</span>
+                  : <span className="bg-gray-700/60 text-gray-500 text-[10px] px-1.5 py-0.5 rounded font-bold">INACTIVE</span>
               )}
             </div>
           </div>
@@ -188,8 +217,9 @@ export default function SyncStatusPanel({ agents = [], onRefresh }) {
         </div>
         <button
           onClick={handleFailover}
-          disabled={doing || !isOperator}
-          title={isOperator ? '' : 'operator 이상 권한이 필요합니다'}
+          disabled={doing || !isOperator || !standby}
+          title={!isOperator ? 'operator 이상 권한이 필요합니다'
+            : !standby ? '승격 가능한 standby 노드가 없습니다' : ''}
           className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center"
         >
           <Zap className="w-4 h-4 mr-2" />
