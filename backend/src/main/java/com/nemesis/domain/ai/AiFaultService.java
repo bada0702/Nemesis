@@ -96,17 +96,15 @@ public class AiFaultService {
         Node node = nodeRepository.findById(nodeId)
                 .orElseThrow(() -> new IllegalArgumentException("Node not found: " + nodeId));
 
-        MetricsPushRequest metrics = metricsCache.get(nodeId)
-                .orElseThrow(() -> new IllegalStateException("No cached metrics for node: " + nodeId));
-
-        List<String> errorLogs = metrics.getErrorLogPreview();
-        if (errorLogs == null || errorLogs.isEmpty()) {
-            throw new IllegalStateException("에러 로그가 없습니다.");
-        }
+        // 장애·무응답 노드는 캐시 메트릭이나 에러 로그가 없을 수 있다(바로 그때가 분석이
+        // 가장 필요한 시점이다). 하드 실패 대신 가용한 노드 상태로 분석 입력을 구성해
+        // 다운된 노드도 진단 가능하게 한다.
+        MetricsPushRequest metrics = metricsCache.get(nodeId).orElse(null);
+        String analysisInput = buildAnalysisInput(node, metrics);
 
         AiFaultAnalysis analysis = AiFaultAnalysis.builder()
                 .node(node)
-                .errorLogs(String.join("\n", errorLogs))
+                .errorLogs(analysisInput)
                 .triggerType(triggerType)
                 .status("ANALYZING")
                 .build();
@@ -127,5 +125,31 @@ public class AiFaultService {
         }
 
         return analysisRepository.save(analysis);
+    }
+
+    /**
+     * LLM 분석 입력 구성. 에이전트 에러 로그가 있으면 그것을 쓰고, 없으면(장애·무응답 노드)
+     * 노드 상태(role/ip/마지막 보고/자원)를 컨텍스트로 구성해 다운 노드도 진단할 수 있게 한다.
+     */
+    private String buildAnalysisInput(Node node, MetricsPushRequest metrics) {
+        List<String> logs = metrics != null ? metrics.getErrorLogPreview() : null;
+        if (logs != null && !logs.isEmpty()) {
+            return String.join("\n", logs);
+        }
+        StringBuilder sb = new StringBuilder();
+        sb.append("노드 ").append(node.getHostname())
+          .append(" (role=").append(node.getRole())
+          .append(", ip=").append(node.getIpAddress() != null ? node.getIpAddress() : "?").append(")\n");
+        if (metrics == null) {
+            sb.append("에이전트 메트릭 수신 없음 — 노드 무응답/다운 상태로 추정됨.\n");
+            sb.append(node.getLastSeenAt() != null
+                    ? "마지막 정상 보고: " + node.getLastSeenAt() + "\n"
+                    : "등록 후 한 번도 보고한 적 없음.\n");
+        } else {
+            sb.append(String.format("자원: CPU %.0f%%, MEM %.0f%%, DISK %.0f%%. 별도 에러 로그 없음.%n",
+                    metrics.getCpuPercent(), metrics.getMemoryPercent(), metrics.getDiskPercent()));
+        }
+        sb.append("위 장애 상황의 가능한 원인과 복구 절차를 진단하라.");
+        return sb.toString();
     }
 }
