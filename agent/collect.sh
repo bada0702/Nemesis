@@ -11,9 +11,11 @@ CPU_IDLE=$(vmstat 1 2 | tail -1 | awk '{print $15}')
 CPU=$(echo "100 - ${CPU_IDLE:-0}" | bc)
 
 # Memory: free -m (LC_ALL=C 로 영문 출력 보장)
+# total - available 방식: buffers/cache 포함, htop 기준과 일치
 MEM_LINE=$(free -m | grep Mem)
 MEM_TOTAL=$(echo "$MEM_LINE" | awk '{print $2}')
-MEM_USED=$(echo "$MEM_LINE"  | awk '{print $3}')
+MEM_AVAIL=$(echo "$MEM_LINE" | awk '{print $7}')
+MEM_USED=$(echo "$MEM_TOTAL - $MEM_AVAIL" | bc)
 if [ "${MEM_TOTAL:-0}" -gt 0 ]; then
   MEM_PCT=$(echo "scale=1; $MEM_USED * 100 / $MEM_TOTAL" | bc)
 else
@@ -36,11 +38,18 @@ if [ -f /proc/net/dev ]; then
   NET_TX=$(echo "$NET_LINE" | awk '{print $10}')
 fi
 
-# 알려진 프로세스 감지
+# 알려진 프로세스 감지 (+ 프로세스별 CPU/메모리 사용률)
 PROCESSES=""
-for P in ora_pmon tibero tomcat nginx httpd mysqld mariadbd postgres mongod redis-server db2sysc; do
-  PID=$(pgrep -f "$P" 2>/dev/null | head -1)
-  [ -n "$PID" ] && PROCESSES="${PROCESSES},{\"name\":\"$P\",\"pid\":\"$PID\",\"status\":\"running\"}"
+for P in ora_pmon tibero tomcat nginx httpd apache2 php-fpm php mysqld mariadbd postgres mongod redis-server db2sysc rabbitmq-server java node python; do
+  PIDS=$(pgrep -f "$P" 2>/dev/null || true)
+  [ -z "$PIDS" ] && continue
+  FIRST=$(echo "$PIDS" | head -1)
+  CSV=$(echo "$PIDS" | tr '\n' ',' | sed 's/,$//')
+  # 매칭되는 모든 PID의 %CPU·%MEM을 합산(멀티 워커 서비스 대응)
+  USAGE=$(ps -o %cpu=,%mem= -p "$CSV" 2>/dev/null | awk '{c+=$1; m+=$2} END {printf "%.1f|%.1f", c+0, m+0}')
+  PCPU=$(echo "$USAGE" | cut -d'|' -f1); [ -z "$PCPU" ] && PCPU=0
+  PMEM=$(echo "$USAGE" | cut -d'|' -f2); [ -z "$PMEM" ] && PMEM=0
+  PROCESSES="${PROCESSES},{\"name\":\"$P\",\"pid\":\"$FIRST\",\"status\":\"running\",\"cpuPercent\":$PCPU,\"memPercent\":$PMEM}"
 done
 PROCESSES=$(echo "$PROCESSES" | sed 's/^,//')
 

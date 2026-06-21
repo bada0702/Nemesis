@@ -18,6 +18,21 @@ const agentUp = n => n?.lastSeenAt != null && (Date.now() - new Date(n.lastSeenA
 const roleRank = r => r === 'PRIMARY' ? 0 : r === 'STANDBY' ? 1 : r === 'RECOVERING' ? 2 : 3
 const orderNodes = nodes => [...(nodes ?? [])].sort((x, y) => roleRank(x.role) - roleRank(y.role))
 
+// 서비스별 사용량 미니 바
+function UsageMini({ label, pct }) {
+  const p = Math.max(0, Math.min(100, pct))
+  const col = p >= 90 ? 'bg-red-500' : p >= 75 ? 'bg-amber-500' : 'bg-sky-500'
+  return (
+    <div className="flex items-center gap-1 flex-1 min-w-0">
+      <span className="text-[8px] text-gray-600 shrink-0">{label}</span>
+      <div className="flex-1 h-1 bg-gray-800 rounded-full overflow-hidden">
+        <div className={`h-full rounded-full ${col}`} style={{ width: `${p}%` }} />
+      </div>
+      <span className="text-[8px] text-gray-500 font-mono shrink-0 w-7 text-right">{p.toFixed(0)}%</span>
+    </div>
+  )
+}
+
 // 노드 컬럼 카드: 노드 정보(역할·자원) + 그 노드의 서비스 목록 + 에이전트 상태.
 // 이중화 비교를 위해 좌우로 나란히 배치한다.
 function NodeCard({ node }) {
@@ -73,15 +88,28 @@ function NodeCard({ node }) {
         <div className="space-y-1 max-h-56 overflow-y-auto">
           {procs.length === 0 ? (
             <p className="text-[11px] text-gray-600 py-1">서비스 없음</p>
-          ) : procs.map((p, i) => (
-            <div key={`${p.name}-${i}`} className="flex items-center gap-2">
-              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${p.status === 'running' ? 'bg-emerald-400' : 'bg-red-400'}`} />
-              <span className="text-[12px] text-gray-300 truncate">{p.name}</span>
-              <span className={`ml-auto text-[10px] font-mono font-bold ${p.status === 'running' ? 'text-emerald-400' : 'text-red-400'}`}>
-                {p.status ?? '—'}
-              </span>
-            </div>
-          ))}
+          ) : procs.map((p, i) => {
+            const cpu = parseFloat(p.cpuPercent ?? 0) || 0
+            const mem = parseFloat(p.memPercent ?? 0) || 0
+            const showUsage = p.cpuPercent != null && p.status === 'running'
+            return (
+              <div key={`${p.name}-${i}`} className="py-0.5">
+                <div className="flex items-center gap-2">
+                  <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${p.status === 'running' ? 'bg-emerald-400' : 'bg-red-400'}`} />
+                  <span className="text-[12px] text-gray-300 truncate">{p.name}</span>
+                  <span className={`ml-auto text-[10px] font-mono font-bold ${p.status === 'running' ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {p.status ?? '—'}
+                  </span>
+                </div>
+                {showUsage && (
+                  <div className="flex items-center gap-3 mt-0.5 pl-3.5">
+                    <UsageMini label="CPU" pct={cpu} />
+                    <UsageMini label="MEM" pct={mem} />
+                  </div>
+                )}
+              </div>
+            )
+          })}
           <div className="flex items-center gap-2 border-t border-gray-800/50 pt-1.5 mt-1">
             <Bot className="w-3.5 h-3.5 text-indigo-400/70 shrink-0" />
             <span className="text-[12px] text-gray-400">Nemesis Agent</span>
