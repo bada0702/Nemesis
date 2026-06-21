@@ -70,8 +70,8 @@ function Gate() {
           <Route path="/docker/images"         element={<DockerImages />} />
 
           {/* 모니터링 */}
-          <Route path="/monitoring/cluster"    element={<ClusterStatus />} />
-          <Route path="/ha/sync"               element={<Navigate to="/monitoring/cluster" replace />} />
+          <Route path="/monitoring/cluster"    element={<Navigate to="/ha/groups" replace />} />
+          <Route path="/ha/sync"               element={<Navigate to="/ha/groups" replace />} />
           <Route path="/runbook"               element={<Navigate to="/ha/sequence" replace />} />
 
           {/* 작업 */}

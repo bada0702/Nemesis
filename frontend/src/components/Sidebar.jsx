@@ -28,10 +28,6 @@ const MENU = [
     { label: '리포트',    path: '/reports'    },
   ]},
 
-  { label: '모니터링', icon: Activity, path: null, children: [
-    { label: '클러스터 상태', path: '/monitoring/cluster' },
-  ]},
-
   { label: '시스템', icon: Settings, path: null, children: [
     { label: '시스템 설정',  path: '/settings/system'          },
     { label: '에이전트 설치', path: '/settings/agents/install' },

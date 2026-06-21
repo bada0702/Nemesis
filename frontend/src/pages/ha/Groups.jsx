@@ -1,9 +1,18 @@
 import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Server, Zap, RefreshCw, Bot, WifiOff } from 'lucide-react'
-import { getClusters, getClusterStatus, triggerFailover } from '../../api/client'
+import { Server, Zap, RefreshCw, Bot, WifiOff, Activity, Heart, Database, Network } from 'lucide-react'
+import { getClusters, getClusterStatus, getClusterNodes, triggerFailover } from '../../api/client'
 import { useAuth } from '../../auth/AuthContext'
 import { statusBadge, dot } from '../../lib/utils'
+import { ReplicationTab, HeartbeatTab, MetadataSyncTab, AgentStatusTab } from '../monitoring/ClusterStatus'
+
+const STATUS_TABS = [
+  { key: 'overview',    label: '개요',            icon: Network  },
+  { key: 'replication', label: '복제 현황',        icon: Activity },
+  { key: 'heartbeat',   label: '하트비트 현황',    icon: Heart    },
+  { key: 'metadata',    label: '메타데이터 동기화', icon: Database },
+  { key: 'agents',      label: '에이전트',          icon: Server   },
+]
 
 const ROLE_BADGE = {
   PRIMARY:    'text-sky-400 border-sky-500/30 bg-sky-500/10',
@@ -124,9 +133,12 @@ function NodeCard({ node }) {
 }
 
 export default function HaGroups() {
-  const [clusters, setClusters] = useState([])
-  const [loading, setLoading]   = useState(true)
-  const [failing, setFailing]   = useState(null)   // 진행 중인 clusterId
+  const [clusters, setClusters]     = useState([])   // statuses (nodes 포함)
+  const [rawClusters, setRawClusters] = useState([]) // getClusters 원본(에이전트 탭용)
+  const [nodeMap, setNodeMap]       = useState({})   // clusterId → nodes(에이전트 탭용)
+  const [loading, setLoading]       = useState(true)
+  const [failing, setFailing]       = useState(null) // 진행 중인 clusterId
+  const [tab, setTab]               = useState('overview')
   const navigate = useNavigate()
   const { isOperator } = useAuth()
 
@@ -154,10 +166,17 @@ export default function HaGroups() {
     setLoading(true)
     try {
       const listRes = await getClusters()
+      setRawClusters(listRes.data)
       const statuses = await Promise.all(
         listRes.data.map(c => getClusterStatus(c.id).then(r => r.data).catch(() => ({ clusterId: c.id, clusterName: c.name, vip: c.vip, nodes: [] })))
       )
       setClusters(statuses)
+      // 에이전트 탭용 nodeMap
+      const m = {}
+      await Promise.all(listRes.data.map(async c => {
+        try { const r = await getClusterNodes(c.id); m[c.id] = r.data } catch { m[c.id] = [] }
+      }))
+      setNodeMap(m)
     } finally { setLoading(false) }
   }
 
@@ -177,6 +196,21 @@ export default function HaGroups() {
         </button>
       </div>
 
+      {/* 탭: 개요 + 클러스터 상태(복제/하트비트/메타데이터/에이전트) */}
+      <div className="flex gap-2 border-b border-gray-800 overflow-x-auto">
+        {STATUS_TABS.map(t => {
+          const Icon = t.icon
+          return (
+            <button key={t.key} onClick={() => setTab(t.key)}
+              className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px whitespace-nowrap transition-all ${
+                tab === t.key ? 'text-white border-blue-500' : 'text-gray-500 border-transparent hover:text-gray-300 hover:border-gray-600'}`}>
+              <Icon className="w-4 h-4" /> {t.label}
+            </button>
+          )
+        })}
+      </div>
+
+      {tab === 'overview' && (<>
       <div className="grid grid-cols-3 gap-4">
         {[
           { label: '전체 클러스터', value: clusters.length,    color: 'text-white' },
@@ -264,6 +298,12 @@ export default function HaGroups() {
           })}
         </div>
       )}
+      </>)}
+
+      {tab === 'replication' && <ReplicationTab clusters={clusters} loading={loading} />}
+      {tab === 'heartbeat'   && <HeartbeatTab   clusters={clusters} />}
+      {tab === 'metadata'    && <MetadataSyncTab clusters={clusters} />}
+      {tab === 'agents'      && <AgentStatusTab  clusters={rawClusters} nodeMap={nodeMap} loading={loading} />}
     </div>
   )
 }

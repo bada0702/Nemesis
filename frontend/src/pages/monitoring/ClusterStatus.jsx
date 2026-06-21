@@ -8,7 +8,6 @@ import {
   getHaHeartbeat, getHaMetadataSync, triggerHaMetadataSync,
 } from '../../api/client'
 import { statusBadge, dot } from '../../lib/utils'
-import ComingSoon from '../../components/ComingSoon'
 
 // ── 공통 유틸 ──────────────────────────────────────────────────
 function MetricBar({ label, value = 0, warn = 80, crit = 90 }) {
@@ -47,7 +46,7 @@ function fmtTime(iso) {
 }
 
 // ── 탭: 복제 현황 ──────────────────────────────────────────────
-function ReplicationTab({ clusters, loading }) {
+export function ReplicationTab({ clusters, loading }) {
   return (
     <div className="space-y-5">
       {loading && clusters.length === 0 ? (
@@ -116,7 +115,7 @@ function ReplicationTab({ clusters, loading }) {
 }
 
 // ── 탭: 하트비트 현황 ─────────────────────────────────────────
-function HeartbeatTab({ clusters }) {
+export function HeartbeatTab({ clusters }) {
   const [clusterId, setClusterId] = useState(null)
   const [data, setData]           = useState(null)
   const [loading, setLoading]     = useState(false)
@@ -138,9 +137,8 @@ function HeartbeatTab({ clusters }) {
 
   return (
     <div className="space-y-5">
-      <ComingSoon feature="HA 메타데이터 동기화·하트비트 조회" />
       <div className="flex items-center gap-3">
-        <select value={clusterId ?? ''} onChange={e => setClusterId(+e.target.value)}
+        <select value={clusterId ?? ''} onChange={e => setClusterId(e.target.value)}
           className="px-3 py-2 rounded-lg text-xs bg-gray-900 border border-gray-700 text-white outline-none focus:border-blue-500">
           {clusters.map(c => <option key={c.clusterId} value={c.clusterId}>{c.clusterName}</option>)}
         </select>
@@ -211,7 +209,7 @@ function HeartbeatTab({ clusters }) {
 }
 
 // ── 탭: 메타데이터 동기화 ──────────────────────────────────────
-function MetadataSyncTab({ clusters }) {
+export function MetadataSyncTab({ clusters }) {
   const [clusterId, setClusterId] = useState(null)
   const [data, setData]           = useState(null)
   const [loading, setLoading]     = useState(false)
@@ -248,7 +246,7 @@ function MetadataSyncTab({ clusters }) {
   return (
     <div className="space-y-5">
       <div className="flex items-center gap-3">
-        <select value={clusterId ?? ''} onChange={e => setClusterId(+e.target.value)}
+        <select value={clusterId ?? ''} onChange={e => setClusterId(e.target.value)}
           className="px-3 py-2 rounded-lg text-xs bg-gray-900 border border-gray-700 text-white outline-none focus:border-blue-500">
           {clusters.map(c => <option key={c.clusterId} value={c.clusterId}>{c.clusterName}</option>)}
         </select>
@@ -333,7 +331,7 @@ function MetadataSyncTab({ clusters }) {
 }
 
 // ── 탭: 에이전트 상태 (읽기 전용) ────────────────────────────
-function AgentStatusTab({ clusters, nodeMap, loading }) {
+export function AgentStatusTab({ clusters, nodeMap, loading }) {
   return (
     <div className="space-y-5">
       {loading && clusters.length === 0 ? (
