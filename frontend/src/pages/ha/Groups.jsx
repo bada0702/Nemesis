@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Server, Zap, RefreshCw, Bot, Link2, Unlink } from 'lucide-react'
+import { Server, Zap, RefreshCw, Bot, WifiOff } from 'lucide-react'
 import { getClusters, getClusterStatus } from '../../api/client'
 import { statusBadge, dot } from '../../lib/utils'
 
@@ -12,6 +12,10 @@ const ROLE_BADGE = {
 }
 
 const agentUp = n => n?.lastSeenAt != null && (Date.now() - new Date(n.lastSeenAt).getTime()) < 30_000
+
+// PRIMARY를 항상 앞(왼쪽)에, 그 다음 STANDBY, 마지막 FAULT 순으로 정렬.
+const roleRank = r => r === 'PRIMARY' ? 0 : r === 'STANDBY' ? 1 : r === 'RECOVERING' ? 2 : 3
+const orderNodes = nodes => [...(nodes ?? [])].sort((x, y) => roleRank(x.role) - roleRank(y.role))
 
 // 노드 컬럼 카드: 노드 정보(역할·자원) + 그 노드의 서비스 목록 + 에이전트 상태.
 // 이중화 비교를 위해 좌우로 나란히 배치한다.
@@ -167,22 +171,23 @@ export default function HaGroups() {
                 {(c.nodes?.length ?? 0) === 0 ? (
                   <p className="text-xs text-gray-600 py-2">등록된 노드가 없습니다.</p>
                 ) : (c.nodes?.length ?? 0) === 2 ? (
-                  // 2노드 이중화 — 가운데에 실시간 동기화 연결(연결/끊김) 표시
+                  // 2노드 이중화 — PRIMARY 좌측 고정, 가운데에 실시간 동기화 표시
                   (() => {
-                    const a = c.nodes[0], b = c.nodes[1]
+                    const [a, b] = orderNodes(c.nodes)   // PRIMARY가 항상 왼쪽
                     const synced = agentUp(a) && agentUp(b) && !hasFault
                     return (
                       <div className="flex items-stretch gap-2">
                         <div className="flex-1"><NodeCard node={a} /></div>
-                        <div className="relative flex flex-col items-center justify-center w-24 shrink-0 px-1">
-                          {/* 노드 간 연결선: 동기화 OK=실선 초록, 끊김=점선 빨강 */}
-                          <div className={`absolute top-1/2 -translate-y-1/2 left-0 right-0 border-t-2 ${synced ? 'border-green-500/40' : 'border-red-500/50 border-dashed'}`} />
-                          <div className="relative z-10 flex flex-col items-center gap-1.5">
-                            <div className={`w-10 h-10 rounded-full flex items-center justify-center border-2 ${synced ? 'border-green-500/50 bg-green-500/10 animate-pulse' : 'border-red-500/50 bg-red-500/10'}`}>
-                              {synced ? <Link2 className="w-4 h-4 text-green-400" /> : <Unlink className="w-4 h-4 text-red-400" />}
-                            </div>
-                            <span className={`text-[9px] font-bold text-center leading-tight whitespace-pre-line ${synced ? 'text-green-400' : 'text-red-400'}`}>
-                              {synced ? '실시간\n동기화' : '동기화\n끊김'}
+                        <div className="relative flex items-center justify-center w-28 shrink-0">
+                          {/* 연결 트랙: 동기화면 그라데이션, 끊기면 빨강 점선 */}
+                          <div className={`absolute left-0 right-0 h-0.5 ${synced ? 'bg-gradient-to-r from-sky-500/50 via-emerald-400/70 to-emerald-500/50' : 'border-t-2 border-dashed border-red-500/40 h-0'}`} />
+                          {/* 중앙 동기화 배지 */}
+                          <div className={`relative z-10 flex flex-col items-center gap-1 rounded-xl border px-3 py-2 backdrop-blur-sm ${synced ? 'border-emerald-500/40 bg-emerald-500/10' : 'border-red-500/40 bg-red-500/10'}`}>
+                            {synced
+                              ? <RefreshCw className="w-4 h-4 text-emerald-400 animate-spin" style={{ animationDuration: '3s' }} />
+                              : <WifiOff className="w-4 h-4 text-red-400" />}
+                            <span className={`text-[9px] font-bold whitespace-nowrap ${synced ? 'text-emerald-400' : 'text-red-400'}`}>
+                              {synced ? '실시간 동기화' : '동기화 끊김'}
                             </span>
                           </div>
                         </div>
@@ -191,9 +196,9 @@ export default function HaGroups() {
                     )
                   })()
                 ) : (
-                  // 1개 또는 3개+ 노드 — 좌우 그리드로 나란히
+                  // 1개 또는 3개+ 노드 — PRIMARY 우선 정렬, 좌우 그리드로 나란히
                   <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-                    {c.nodes.map(n => <NodeCard key={n.nodeId} node={n} />)}
+                    {orderNodes(c.nodes).map(n => <NodeCard key={n.nodeId} node={n} />)}
                   </div>
                 )}
               </div>
