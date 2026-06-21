@@ -1,7 +1,10 @@
 import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Server, Zap, RefreshCw, Bot, WifiOff, Activity, Heart, Database, Network } from 'lucide-react'
-import { getClusters, getClusterStatus, getClusterNodes, triggerFailover } from '../../api/client'
+import { Server, Zap, RefreshCw, Bot, WifiOff, Activity, Heart, Database, Network, Save, RotateCcw, Trash2, X } from 'lucide-react'
+import {
+  getClusters, getClusterStatus, getClusterNodes, triggerFailover,
+  backupClusterConfig, getConfigSnapshots, restoreConfigSnapshot, deleteConfigSnapshot, syncClusterConfig,
+} from '../../api/client'
 import { useAuth } from '../../auth/AuthContext'
 import { statusBadge, dot } from '../../lib/utils'
 import { ReplicationTab, HeartbeatTab, MetadataSyncTab, AgentStatusTab } from '../monitoring/ClusterStatus'
@@ -132,6 +135,65 @@ function NodeCard({ node }) {
   )
 }
 
+// 설정 스냅샷(백업 목록) 모달 — 복구/삭제
+function SnapshotModal({ cluster, isOperator, onClose, onAfter }) {
+  const [snaps, setSnaps] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [busy, setBusy] = useState(false)
+
+  const load = () => getConfigSnapshots(cluster.clusterId)
+    .then(r => setSnaps(r.data)).catch(() => {}).finally(() => setLoading(false))
+  useEffect(() => { load() }, [])
+
+  async function restore(s) {
+    if (!window.confirm(`'${s.name}' 스냅샷으로 ${cluster.clusterName} 설정을 복구하시겠습니까?\n현재 클러스터/노드 설정이 덮어쓰여집니다.`)) return
+    setBusy(true)
+    try {
+      const r = await restoreConfigSnapshot(cluster.clusterId, s.id)
+      alert(`복구 완료: ${r.data.cluster} (노드 ${r.data.nodesRestored}개)`) ; onAfter?.()
+    } catch (e) { alert('복구 실패: ' + (e?.response?.data?.message ?? e.message)) }
+    finally { setBusy(false) }
+  }
+  async function remove(s) {
+    if (!window.confirm(`'${s.name}' 스냅샷을 삭제하시겠습니까?`)) return
+    try { await deleteConfigSnapshot(cluster.clusterId, s.id); load() }
+    catch (e) { alert('삭제 실패: ' + (e?.response?.data?.message ?? e.message)) }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="card-bg rounded-2xl w-full max-w-lg">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
+          <span className="text-sm font-bold text-white">{cluster.clusterName} 설정 스냅샷</span>
+          <button onClick={onClose} className="text-gray-500 hover:text-white"><X className="w-4 h-4" /></button>
+        </div>
+        <div className="p-4 max-h-[60vh] overflow-y-auto space-y-2">
+          {loading ? <p className="text-xs text-gray-500 text-center py-6">로딩 중...</p>
+            : snaps.length === 0 ? <p className="text-xs text-gray-600 text-center py-6">저장된 스냅샷이 없습니다.</p>
+            : snaps.map(s => (
+              <div key={s.id} className="flex items-center gap-3 bg-gray-900/40 rounded-lg px-4 py-2.5">
+                <Database className="w-4 h-4 text-sky-400 shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-sm text-gray-200 truncate">{s.name}</p>
+                  <p className="text-[10px] text-gray-600">{s.createdAt}</p>
+                </div>
+                <div className="ml-auto flex items-center gap-1.5">
+                  <button disabled={!isOperator || busy} onClick={() => restore(s)}
+                    title={isOperator ? '복구' : 'operator 이상 권한 필요'}
+                    className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded bg-sky-600/15 border border-sky-500/30 text-sky-300 hover:bg-sky-600/25 disabled:opacity-40 disabled:cursor-not-allowed">
+                    <RotateCcw className="w-3 h-3" /> 복구
+                  </button>
+                  <button onClick={() => remove(s)} title="삭제"
+                    className="p-1.5 rounded text-gray-500 hover:text-red-400"><Trash2 className="w-3.5 h-3.5" /></button>
+                </div>
+              </div>
+            ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function HaGroups() {
   const [clusters, setClusters]     = useState([])   // statuses (nodes 포함)
   const [rawClusters, setRawClusters] = useState([]) // getClusters 원본(에이전트 탭용)
@@ -139,8 +201,21 @@ export default function HaGroups() {
   const [loading, setLoading]       = useState(true)
   const [failing, setFailing]       = useState(null) // 진행 중인 clusterId
   const [tab, setTab]               = useState('overview')
+  const [snapCluster, setSnapCluster] = useState(null)   // 스냅샷 모달 대상
   const navigate = useNavigate()
   const { isOperator } = useAuth()
+
+  async function doBackup(c) {
+    const name = window.prompt('스냅샷 이름(비우면 자동):', `${c.clusterName} ${new Date().toLocaleString('ko-KR')}`)
+    if (name === null) return
+    try { await backupClusterConfig(c.clusterId, name); alert('설정 저장 완료') }
+    catch (e) { alert('설정 저장 실패: ' + (e?.response?.data?.message ?? e.message)) }
+  }
+  async function doSync(c) {
+    if (!window.confirm(`${c.clusterName} 설정을 노드에 동기화하시겠습니까?`)) return
+    try { const r = await syncClusterConfig(c.clusterId); alert(r.data.message ?? '동기화 요청됨') }
+    catch (e) { alert('동기화 실패: ' + (e?.response?.data?.message ?? e.message)) }
+  }
 
   // 실제 수동 Failover 실행(상세 페이지 이동이 아님). 승격 가능한 standby 필요.
   async function doFailover(c) {
@@ -240,10 +315,23 @@ export default function HaGroups() {
                     <span className="font-bold text-white">{c.clusterName}</span>
                     <span className="text-xs text-gray-500">VIP: {c.vip || '—'}</span>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 flex-wrap">
                     <button onClick={() => navigate(`/cluster/${c.clusterId}`)}
                       className="text-xs px-3 py-1.5 rounded-lg border border-gray-700 text-gray-400 hover:text-white hover:border-gray-600">
                       상세 보기
+                    </button>
+                    <button onClick={() => doBackup(c)} title="현재 설정 저장"
+                      className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg border border-gray-700 text-gray-400 hover:text-white hover:border-gray-600">
+                      <Save className="w-3 h-3" /> 설정 저장
+                    </button>
+                    <button onClick={() => setSnapCluster(c)} title="저장된 설정으로 복구"
+                      className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg border border-gray-700 text-gray-400 hover:text-white hover:border-gray-600">
+                      <RotateCcw className="w-3 h-3" /> 복구
+                    </button>
+                    <button onClick={() => doSync(c)} disabled={!isOperator}
+                      title={isOperator ? '노드에 설정 동기화' : 'operator 이상 권한이 필요합니다'}
+                      className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg border border-gray-700 text-gray-400 hover:text-white hover:border-gray-600 disabled:opacity-40 disabled:cursor-not-allowed">
+                      <RefreshCw className="w-3 h-3" /> 노드 동기화
                     </button>
                     {(() => {
                       const standby = c.nodes?.find(n => n.role === 'STANDBY')
@@ -304,6 +392,11 @@ export default function HaGroups() {
       {tab === 'heartbeat'   && <HeartbeatTab   clusters={clusters} />}
       {tab === 'metadata'    && <MetadataSyncTab clusters={clusters} />}
       {tab === 'agents'      && <AgentStatusTab  clusters={rawClusters} nodeMap={nodeMap} loading={loading} />}
+
+      {snapCluster && (
+        <SnapshotModal cluster={snapCluster} isOperator={isOperator}
+          onClose={() => setSnapCluster(null)} onAfter={() => { setSnapCluster(null); load() }} />
+      )}
     </div>
   )
 }

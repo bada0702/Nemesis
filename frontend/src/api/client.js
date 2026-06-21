@@ -41,6 +41,13 @@ export const getClusterAgent    = (id)           => client.get(`/clusters/${id}/
 export const getClusterNetwork  = (id)           => client.get(`/clusters/${id}/network`)
 export const triggerFailover    = (id, data)     => client.post(`/clusters/${id}/failover`, data)
 export const triggerAppFailover = (id, data)     => client.post(`/clusters/${id}/apps/failover`, data)
+
+// 클러스터 설정 백업/복구/노드 동기화
+export const backupClusterConfig   = (id, name) => client.post(`/clusters/${id}/config/backup`, { name })
+export const getConfigSnapshots    = (id)       => client.get(`/clusters/${id}/config/snapshots`)
+export const restoreConfigSnapshot = (id, sid)  => client.post(`/clusters/${id}/config/snapshots/${sid}/restore`)
+export const deleteConfigSnapshot  = (id, sid)  => client.delete(`/clusters/${id}/config/snapshots/${sid}`)
+export const syncClusterConfig     = (id)       => client.post(`/clusters/${id}/config/sync`)
 export const controlAppService  = (id, data)     => client.post(`/clusters/${id}/apps/control`, data)
 export const getAiAnalysis      = (id)           => client.get(`/clusters/${id}/ai-analysis`)
 

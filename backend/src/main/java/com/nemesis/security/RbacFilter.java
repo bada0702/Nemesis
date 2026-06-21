@@ -59,6 +59,8 @@ public class RbacFilter extends OncePerRequestFilter {
         if (path.endsWith("/vip/down"))                  return Need.OPERATOR;  // POST /api/clusters/{id}/vip/down
         if (path.matches("/api/agent/[^/]+/execute"))    return Need.OPERATOR;
         if (path.matches("/api/ai/proposals/[^/]+/(approve|reject)")) return Need.OPERATOR;
+        if (path.matches("/api/clusters/[^/]+/config/snapshots/[^/]+/restore")) return Need.OPERATOR;
+        if (path.matches("/api/clusters/[^/]+/config/sync")) return Need.OPERATOR;
         return Need.NONE;
     }
 
