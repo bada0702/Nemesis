@@ -363,28 +363,9 @@ export default function ClusterDetail() {
           <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" /> Node Status
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {status.nodes.map(node => <NodeStatus key={node.nodeId} node={node} />)}
+          {status.nodes.map(node => <NodeStatus key={node.nodeId} node={node} clusterId={id} />)}
         </div>
       </div>
-
-      {/* 메트릭 차트 */}
-      {status.nodes.map(node => {
-        const h = histRef.current[node.nodeId] ?? { cpu: [], mem: [], disk: [] }
-        if (!node.metrics && h.cpu.length === 0) return null
-        return (
-          <div key={node.nodeId}>
-            <h2 className="text-[10px] font-bold text-gray-600 uppercase tracking-widest mb-3 flex items-center gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-gray-600" />
-              {node.hostname} — Metrics
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <MetricsChart title="CPU"    dataPoints={[...h.cpu]}  color="#60a5fa" />
-              <MetricsChart title="Memory" dataPoints={[...h.mem]}  color="#34d399" />
-              <MetricsChart title="Disk"   dataPoints={[...h.disk]} color="#fbbf24" />
-            </div>
-          </div>
-        )
-      })}
     </div>
   )
 }
