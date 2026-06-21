@@ -20,6 +20,7 @@
 #   gpfs-state                          mmgetstate 요약(0=active)
 #   svc-start  <name>                   서비스 기동(systemd/SysV 자동 감지)
 #   svc-stop   <name>                   서비스 종료
+#   svc-restart <name>                  서비스 재시작
 #   svc-status <name>                   서비스 상태(running=0)
 # =============================================================================
 export LC_ALL=C LANG=C
@@ -58,6 +59,24 @@ vip_present() {
   return 1
 }
 
+# 설정된 iface가 존재하면 그대로 쓰고, 없으면 VIP 대상 서브넷의 실제 인터페이스를
+# 라우팅으로 자동 감지한다. 호스트마다 NIC명이 달라(eth0/ens33/wlp5s0/en0) 기본값
+# 'eth0'이 안 맞으면 VIP 인수가 실패하던 문제를 보정한다. AIX/ip 미지원 시 설정값 유지.
+resolve_iface() {
+  _iface=$1; _vip=$2
+  if has ip; then
+    if ip link show "$_iface" >/dev/null 2>&1; then
+      echo "$_iface"; return 0
+    fi
+    _dev=$(ip -o route get "$_vip" 2>/dev/null | sed -n 's/.* dev \([^ ]*\).*/\1/p' | head -1)
+    if [ -n "$_dev" ]; then
+      log "설정 iface '$_iface' 없음 → 자동 감지 '$_dev' 사용 (VIP $_vip 서브넷)"
+      echo "$_dev"; return 0
+    fi
+  fi
+  echo "$_iface"
+}
+
 send_garp() {
   _iface=$1; _vip=$2
   if has arping; then
@@ -73,6 +92,7 @@ send_garp() {
 vip_up() {
   iface=$1; vip=$2; cidr=${3:-24}
   [ -n "$iface" ] && [ -n "$vip" ] || usage
+  iface=$(resolve_iface "$iface" "$vip")
 
   if vip_present "$vip"; then
     log "VIP $vip 이미 존재 — 멱등 통과"
@@ -103,6 +123,19 @@ vip_down() {
   if ! vip_present "$vip"; then
     log "VIP $vip 미존재 — 멱등 통과"; exit 0
   fi
+
+  # VIP가 어느 인터페이스에 실제로 할당됐는지 찾는다.
+  # ip route get은 VIP 할당 후 'local dev lo'를 반환하므로 신뢰할 수 없다.
+  if has ip; then
+    _actual=$(ip -o addr show 2>/dev/null | awk -v vip="$vip" '$4 ~ "^"vip"/" {print $2; exit}')
+    if [ -n "$_actual" ]; then
+      log "VIP $vip 실제 인터페이스: $_actual"
+      iface="$_actual"
+    else
+      iface=$(resolve_iface "$iface" "$vip")
+    fi
+  fi
+
   case "$OS" in
     Linux) ip addr del "$vip/$cidr" dev "$iface" || die "VIP 제거 실패" ;;
     AIX)   ifconfig "$iface" delete "$vip"       || die "VIP delete 실패" ;;
@@ -203,6 +236,7 @@ case "$SUB" in
   gpfs-state)  gpfs_state ;;
   svc-start)   svc_action start "$1" && { log "$1 started"; exit 0; } || die "$1 start 실패" ;;
   svc-stop)    svc_action stop  "$1" && { log "$1 stopped"; exit 0; } || die "$1 stop 실패" ;;
+  svc-restart) svc_action restart "$1" && { log "$1 restarted"; exit 0; } || die "$1 restart 실패" ;;
   svc-status)  svc_status "$1" ;;
   docker-ps)     docker_ps ;;
   docker-images) docker_images ;;

@@ -2,11 +2,83 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import {
   Monitor, RefreshCw, ScanLine, Plus, X, Check, Trash2, Star, Search, AlertTriangle,
+  Play, Square, RotateCw, Server,
 } from 'lucide-react'
 import {
   getClusters, getServiceCatalog, scanServiceCatalog,
   registerServices, updateManagedService, deleteManagedService,
+  getClusterStatus, executeAgentCommand,
 } from '../api/client'
+import { useAuth } from '../auth/AuthContext'
+
+// 프로세스명 → 타입 추론(백엔드 inferType와 동일 취지). 프리셋 필터링용.
+function inferType(name) {
+  const n = (name || '').toLowerCase()
+  if (/(mysql|maria|postgres|oracle|mongo|redis|db2|tibero)/.test(n)) return 'DB'
+  if (/(nginx|apache|httpd|haproxy)/.test(n)) return 'WEB'
+  if (/(tomcat|jboss|was|java|node|python|uwsgi|gunicorn)/.test(n)) return 'WAS'
+  return 'SW'
+}
+
+// ── 실시간 서비스(노드별 프로세스) + 제어 ──────────────────────
+function LiveServices({ nodes, presetTypes, isOperator, onAfter }) {
+  const [busy, setBusy] = useState(null)   // `${nodeId}:${name}:${action}`
+
+  async function ctl(nodeId, name, action) {
+    const tag = `${nodeId}:${name}:${action}`
+    setBusy(tag)
+    try {
+      const r = await executeAgentCommand(nodeId, { command: `control.sh ${action} ${name}` })
+      const d = r?.data ?? {}
+      if (d.exitCode !== 0) {
+        alert(`${name} ${action.replace('svc-', '')} 실패:\n${(d.stderr || d.stdout || '').trim() || 'exit ' + d.exitCode}`)
+      }
+    } catch (e) {
+      alert('명령 실패: ' + (e?.response?.data?.message ?? e.message))
+    } finally {
+      setBusy(null)
+      onAfter?.()
+    }
+  }
+
+  const rows = nodes.flatMap(node =>
+    (node.processes ?? [])
+      .filter(p => !presetTypes || presetTypes.includes(inferType(p.name)))
+      .map(p => ({ ...p, nodeId: node.nodeId, hostname: node.hostname, type: inferType(p.name) }))
+  )
+
+  if (rows.length === 0) {
+    return <p className="text-xs text-gray-600 px-1 py-3">실행 중으로 보고된 서비스가 없습니다.</p>
+  }
+
+  const tip = isOperator ? '' : 'operator 이상 권한이 필요합니다'
+  return (
+    <div className="space-y-1.5">
+      {rows.map((r, i) => {
+        const up = r.status === 'running'
+        const b = a => busy === `${r.nodeId}:${r.name}:${a}`
+        const anyBusy = b('svc-start') || b('svc-stop') || b('svc-restart')
+        return (
+          <div key={`${r.nodeId}-${r.name}-${i}`} className="flex items-center gap-3 card-bg rounded-lg px-4 py-2.5">
+            <span className={`w-1.5 h-1.5 rounded-full ${up ? 'bg-emerald-400' : 'bg-red-400'}`} />
+            <span className="text-sm font-medium text-gray-200">{r.name}</span>
+            <TypeBadge type={r.type} />
+            <span className="text-[11px] text-gray-500 flex items-center gap-1"><Server className="w-3 h-3" />{r.hostname}</span>
+            <span className={`text-[11px] font-mono font-bold ${up ? 'text-emerald-400' : 'text-red-400'}`}>{up ? 'running' : 'stopped'}</span>
+            <div className="ml-auto flex items-center gap-1.5">
+              <button disabled={!isOperator || anyBusy} title={tip || '시작'} onClick={() => ctl(r.nodeId, r.name, 'svc-start')}
+                className="p-1.5 rounded text-emerald-400 hover:bg-emerald-500/10 disabled:opacity-30 disabled:cursor-not-allowed"><Play className="w-3.5 h-3.5" /></button>
+              <button disabled={!isOperator || anyBusy} title={tip || '중지'} onClick={() => ctl(r.nodeId, r.name, 'svc-stop')}
+                className="p-1.5 rounded text-red-400 hover:bg-red-500/10 disabled:opacity-30 disabled:cursor-not-allowed"><Square className="w-3.5 h-3.5" /></button>
+              <button disabled={!isOperator || anyBusy} title={tip || '재시작'} onClick={() => ctl(r.nodeId, r.name, 'svc-restart')}
+                className={`p-1.5 rounded text-sky-400 hover:bg-sky-500/10 disabled:opacity-30 disabled:cursor-not-allowed ${anyBusy ? 'animate-spin' : ''}`}><RotateCw className="w-3.5 h-3.5" /></button>
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
 
 const POLL_MS = 5000
 
@@ -362,6 +434,8 @@ export default function ServiceCatalog() {
   const [filter, setFilter]       = useState('')
   const [scanOpen, setScanOpen]   = useState(false)
   const [addOpen, setAddOpen]     = useState(false)
+  const [liveNodes, setLiveNodes] = useState([])   // 노드별 실시간 프로세스(제어 대상)
+  const { isOperator } = useAuth()
 
   useEffect(() => {
     getClusters().then(r => {
@@ -374,7 +448,15 @@ export default function ServiceCatalog() {
   const load = useCallback(async () => {
     if (!clusterId) return
     try { const r = await getServiceCatalog(clusterId); setItems(r.data.items ?? []) }
-    catch { /* ignore */ } finally { setLoading(false) }
+    catch { /* ignore */ }
+    // 실시간 서비스: 클러스터 상태의 노드별 metrics.processes로 구성(제어용 nodeId 포함)
+    try {
+      const sr = await getClusterStatus(clusterId)
+      setLiveNodes((sr.data.nodes ?? []).map(n => ({
+        nodeId: n.nodeId, hostname: n.hostname, processes: n.metrics?.processes ?? [],
+      })))
+    } catch { /* ignore */ }
+    finally { setLoading(false) }
   }, [clusterId])
 
   useEffect(() => {
@@ -467,6 +549,19 @@ export default function ServiceCatalog() {
           ))}
         </div>
       </div>
+
+      {/* 실시간 서비스 상태 + 제어 (대시보드와 동일한 노드 보고 데이터) */}
+      {clusterId && (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-bold text-white flex items-center gap-2">
+              <Server className="w-4 h-4 text-sky-400" /> 실시간 서비스 상태
+            </h3>
+            <span className="text-[10px] text-gray-600">시작 · 중지 · 재시작 (operator 이상)</span>
+          </div>
+          <LiveServices nodes={liveNodes} presetTypes={presetTypes} isOperator={isOperator} onAfter={load} />
+        </div>
+      )}
 
       {loading && items.length === 0 ? (
         <div className="text-center py-16 text-gray-500 text-sm">로딩 중...</div>
