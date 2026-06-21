@@ -25,11 +25,11 @@ const MENU = [
 
   { label: '운영', icon: Zap, path: null, children: [
     { label: '점검 관리', path: '/inspection' },
+    { label: '리포트',    path: '/reports'    },
   ]},
 
   { label: '모니터링', icon: Activity, path: null, children: [
     { label: '클러스터 상태', path: '/monitoring/cluster' },
-    { label: '리포트',        path: '/reports'            },
   ]},
 
   { label: '시스템', icon: Settings, path: null, children: [
