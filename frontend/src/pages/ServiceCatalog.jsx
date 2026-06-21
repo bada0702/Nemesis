@@ -21,57 +21,85 @@ function inferType(name) {
 }
 
 // ── 실시간 서비스(노드별 프로세스) + 제어 ──────────────────────
-function LiveServices({ nodes, presetTypes, isOperator, onAfter }) {
-  const [busy, setBusy] = useState(null)   // `${nodeId}:${name}:${action}`
+// 노드별로 묶은 단일 서비스 목록 — 실행/중지/재시작 + HA 대상 토글을 한 행에서.
+function NodeServices({ nodes, catalogByName, clusterId, presetTypes, filterText, isOperator, onAfter }) {
+  const [busy, setBusy] = useState(null)
+  const tip = isOperator ? '' : 'operator 이상 권한이 필요합니다'
+  const q = (filterText || '').toLowerCase()
 
   async function ctl(nodeId, name, action) {
-    const tag = `${nodeId}:${name}:${action}`
-    setBusy(tag)
+    setBusy(`${nodeId}:${name}:${action}`)
     try {
       const r = await executeAgentCommand(nodeId, { command: `control.sh ${action} ${name}` })
       const d = r?.data ?? {}
-      if (d.exitCode !== 0) {
-        alert(`${name} ${action.replace('svc-', '')} 실패:\n${(d.stderr || d.stdout || '').trim() || 'exit ' + d.exitCode}`)
-      }
-    } catch (e) {
-      alert('명령 실패: ' + (e?.response?.data?.message ?? e.message))
-    } finally {
-      setBusy(null)
-      onAfter?.()
-    }
+      if (d.exitCode !== 0) alert(`${name} ${action.replace('svc-', '')} 실패:\n${(d.stderr || d.stdout || '').trim() || 'exit ' + d.exitCode}`)
+    } catch (e) { alert('명령 실패: ' + (e?.response?.data?.message ?? e.message)) }
+    finally { setBusy(null); onAfter?.() }
   }
 
-  const rows = nodes.flatMap(node =>
-    (node.processes ?? [])
-      .filter(p => !presetTypes || presetTypes.includes(inferType(p.name)))
-      .map(p => ({ ...p, nodeId: node.nodeId, hostname: node.hostname, type: inferType(p.name) }))
-  )
-
-  if (rows.length === 0) {
-    return <p className="text-xs text-gray-600 px-1 py-3">실행 중으로 보고된 서비스가 없습니다.</p>
+  async function toggleHa(name, type) {
+    const reg = catalogByName[(name || '').toLowerCase()]
+    setBusy(`ha:${name}`)
+    try {
+      if (reg) await updateManagedService(clusterId, reg.id, { haManaged: !reg.haManaged })
+      else     await registerServices(clusterId, [{ name, displayName: name, type, haManaged: true }])
+    } catch (e) { alert('HA 대상 설정 실패: ' + (e?.response?.data?.message ?? e.message)) }
+    finally { setBusy(null); onAfter?.() }
   }
 
-  const tip = isOperator ? '' : 'operator 이상 권한이 필요합니다'
+  if (nodes.length === 0) return <p className="text-xs text-gray-600 px-1 py-6 text-center">노드가 없습니다.</p>
+
+  const roleCls = role => role === 'PRIMARY' ? 'text-sky-400 border-sky-500/30 bg-sky-500/10'
+    : role === 'FAULT' ? 'text-red-400 border-red-500/30 bg-red-500/10'
+    : 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10'
+
   return (
-    <div className="space-y-1.5">
-      {rows.map((r, i) => {
-        const up = r.status === 'running'
-        const b = a => busy === `${r.nodeId}:${r.name}:${a}`
-        const anyBusy = b('svc-start') || b('svc-stop') || b('svc-restart')
+    <div className="space-y-4">
+      {nodes.map(node => {
+        const procs = (node.processes ?? [])
+          .filter(p => !presetTypes || presetTypes.includes(inferType(p.name)))
+          .filter(p => !q || (p.name || '').toLowerCase().includes(q))
+        const running = procs.filter(p => p.status === 'running').length
         return (
-          <div key={`${r.nodeId}-${r.name}-${i}`} className="flex items-center gap-3 card-bg rounded-lg px-4 py-2.5">
-            <span className={`w-1.5 h-1.5 rounded-full ${up ? 'bg-emerald-400' : 'bg-red-400'}`} />
-            <span className="text-sm font-medium text-gray-200">{r.name}</span>
-            <TypeBadge type={r.type} />
-            <span className="text-[11px] text-gray-500 flex items-center gap-1"><Server className="w-3 h-3" />{r.hostname}</span>
-            <span className={`text-[11px] font-mono font-bold ${up ? 'text-emerald-400' : 'text-red-400'}`}>{up ? 'running' : 'stopped'}</span>
-            <div className="ml-auto flex items-center gap-1.5">
-              <button disabled={!isOperator || anyBusy} title={tip || '시작'} onClick={() => ctl(r.nodeId, r.name, 'svc-start')}
-                className="p-1.5 rounded text-emerald-400 hover:bg-emerald-500/10 disabled:opacity-30 disabled:cursor-not-allowed"><Play className="w-3.5 h-3.5" /></button>
-              <button disabled={!isOperator || anyBusy} title={tip || '중지'} onClick={() => ctl(r.nodeId, r.name, 'svc-stop')}
-                className="p-1.5 rounded text-red-400 hover:bg-red-500/10 disabled:opacity-30 disabled:cursor-not-allowed"><Square className="w-3.5 h-3.5" /></button>
-              <button disabled={!isOperator || anyBusy} title={tip || '재시작'} onClick={() => ctl(r.nodeId, r.name, 'svc-restart')}
-                className={`p-1.5 rounded text-sky-400 hover:bg-sky-500/10 disabled:opacity-30 disabled:cursor-not-allowed ${anyBusy ? 'animate-spin' : ''}`}><RotateCw className="w-3.5 h-3.5" /></button>
+          <div key={node.nodeId} className="card-bg rounded-xl overflow-hidden">
+            <div className="flex items-center gap-2 px-5 py-3 border-b border-gray-800">
+              <Server className="w-4 h-4 text-slate-500" />
+              <span className="text-sm font-bold text-white">{node.hostname}</span>
+              <span className={`text-[9px] font-bold border rounded px-1.5 py-0.5 ${roleCls(node.role)}`}>{node.role ?? '-'}</span>
+              <span className="ml-auto text-[11px] text-gray-500 font-mono">서비스 {running}/{procs.length}</span>
+            </div>
+            <div className="divide-y divide-gray-800/40">
+              {procs.length === 0 ? (
+                <p className="text-xs text-gray-600 px-5 py-3">표시할 서비스가 없습니다.</p>
+              ) : procs.map((p, i) => {
+                const up = p.status === 'running'
+                const type = inferType(p.name)
+                const isHa = !!catalogByName[(p.name || '').toLowerCase()]?.haManaged
+                const bz = a => busy === `${node.nodeId}:${p.name}:${a}`
+                const anyBusy = bz('svc-start') || bz('svc-stop') || bz('svc-restart')
+                return (
+                  <div key={`${p.name}-${i}`} className="flex items-center gap-3 px-5 py-2.5 hover:bg-white/[0.02]">
+                    <span className={`w-1.5 h-1.5 rounded-full ${up ? 'bg-emerald-400' : 'bg-red-400'}`} />
+                    <span className="text-sm font-medium text-gray-200">{p.name}</span>
+                    <TypeBadge type={type} />
+                    <span className={`text-[11px] font-mono font-bold ${up ? 'text-emerald-400' : 'text-red-400'}`}>{up ? 'running' : 'stopped'}</span>
+                    <div className="ml-auto flex items-center gap-1.5">
+                      <button disabled={!isOperator || anyBusy} title={tip || '시작'} onClick={() => ctl(node.nodeId, p.name, 'svc-start')}
+                        className="p-1.5 rounded text-emerald-400 hover:bg-emerald-500/10 disabled:opacity-30 disabled:cursor-not-allowed"><Play className="w-3.5 h-3.5" /></button>
+                      <button disabled={!isOperator || anyBusy} title={tip || '중지'} onClick={() => ctl(node.nodeId, p.name, 'svc-stop')}
+                        className="p-1.5 rounded text-red-400 hover:bg-red-500/10 disabled:opacity-30 disabled:cursor-not-allowed"><Square className="w-3.5 h-3.5" /></button>
+                      <button disabled={!isOperator || anyBusy} title={tip || '재시작'} onClick={() => ctl(node.nodeId, p.name, 'svc-restart')}
+                        className={`p-1.5 rounded text-sky-400 hover:bg-sky-500/10 disabled:opacity-30 disabled:cursor-not-allowed ${anyBusy ? 'animate-spin' : ''}`}><RotateCw className="w-3.5 h-3.5" /></button>
+                      <div className="w-px h-4 bg-gray-700 mx-1" />
+                      <button disabled={!isOperator || busy === `ha:${p.name}`} title={tip || (isHa ? 'HA 대상 해제' : 'HA 대상 지정')}
+                        onClick={() => toggleHa(p.name, type)}
+                        className={`p-1.5 rounded disabled:opacity-30 disabled:cursor-not-allowed ${isHa ? 'text-amber-400 hover:bg-amber-500/10' : 'text-gray-600 hover:text-amber-400 hover:bg-amber-500/10'}`}>
+                        <Star className="w-3.5 h-3.5" fill={isHa ? 'currentColor' : 'none'} />
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
             </div>
           </div>
         )
@@ -453,7 +481,8 @@ export default function ServiceCatalog() {
     try {
       const sr = await getClusterStatus(clusterId)
       setLiveNodes((sr.data.nodes ?? []).map(n => ({
-        nodeId: n.nodeId, hostname: n.hostname, processes: n.metrics?.processes ?? [],
+        nodeId: n.nodeId, hostname: n.hostname, role: n.role, state: n.state,
+        processes: n.metrics?.processes ?? [],
       })))
     } catch { /* ignore */ }
     finally { setLoading(false) }
@@ -468,14 +497,16 @@ export default function ServiceCatalog() {
   }, [clusterId, load])
 
   const presetTypes = FILTER_PRESETS[preset].types
-  const filtered = useMemo(() => items.filter(s =>
-    (!presetTypes || presetTypes.includes(s.type)) &&
-    (s.displayName.toLowerCase().includes(filter.toLowerCase()) ||
-     s.name.toLowerCase().includes(filter.toLowerCase()))
-  ), [items, presetTypes, filter])
+  // 등록 카탈로그를 이름→엔트리로 매핑(HA 상태 판별용)
+  const catalogByName = useMemo(() => {
+    const m = {}
+    items.forEach(s => { if (s.name) m[s.name.toLowerCase()] = s })
+    return m
+  }, [items])
 
-  const haCount      = items.filter(s => s.haManaged).length
-  const healthyCount = items.filter(s => s.runningCount === s.nodeCount && s.nodeCount > 0).length
+  const liveTotal = liveNodes.reduce((a, n) => a + (n.processes?.length ?? 0), 0)
+  const liveRunning = liveNodes.reduce((a, n) => a + (n.processes?.filter(p => p.status === 'running').length ?? 0), 0)
+  const haCount    = items.filter(s => s.haManaged).length
 
   return (
     <div className="p-8 pt-0 space-y-6">
@@ -511,10 +542,10 @@ export default function ServiceCatalog() {
 
       <div className="grid grid-cols-4 gap-4">
         {[
-          { label: '전체 서비스', value: items.length,                color: 'text-white' },
-          { label: '정상',        value: healthyCount,                color: 'text-green-400' },
-          { label: '이상',        value: items.length - healthyCount, color: items.length - healthyCount > 0 ? 'text-orange-400' : 'text-gray-500' },
-          { label: 'HA 대상',     value: haCount,                     color: 'text-amber-400' },
+          { label: '전체 서비스', value: liveTotal,               color: 'text-white' },
+          { label: '정상(running)', value: liveRunning,           color: 'text-green-400' },
+          { label: '중지',        value: liveTotal - liveRunning, color: liveTotal - liveRunning > 0 ? 'text-orange-400' : 'text-gray-500' },
+          { label: 'HA 대상',     value: haCount,                 color: 'text-amber-400' },
         ].map(c => (
           <div key={c.label} className="card-bg rounded-xl p-4">
             <p className="text-xs text-gray-500">{c.label}</p>
@@ -550,42 +581,32 @@ export default function ServiceCatalog() {
         </div>
       </div>
 
-      {/* 실시간 서비스 상태 + 제어 (대시보드와 동일한 노드 보고 데이터) */}
-      {clusterId && (
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-bold text-white flex items-center gap-2">
-              <Server className="w-4 h-4 text-sky-400" /> 실시간 서비스 상태
-            </h3>
-            <span className="text-[10px] text-gray-600">시작 · 중지 · 재시작 (operator 이상)</span>
-          </div>
-          <LiveServices nodes={liveNodes} presetTypes={presetTypes} isOperator={isOperator} onAfter={load} />
-        </div>
-      )}
+      {/* 클러스터 → 노드별 단일 서비스 목록(실행/중지/재시작 + HA 대상 토글) */}
+      <div className="flex items-center gap-2 text-[10px] text-gray-600">
+        <span className="flex items-center gap-1"><Play className="w-3 h-3 text-emerald-400" />시작</span>
+        <span className="flex items-center gap-1"><Square className="w-3 h-3 text-red-400" />중지</span>
+        <span className="flex items-center gap-1"><RotateCw className="w-3 h-3 text-sky-400" />재시작</span>
+        <span className="flex items-center gap-1"><Star className="w-3 h-3 text-amber-400" />HA 대상 지정/해제</span>
+        <span className="ml-1">(operator 이상)</span>
+      </div>
 
-      {loading && items.length === 0 ? (
+      {loading && liveNodes.length === 0 ? (
         <div className="text-center py-16 text-gray-500 text-sm">로딩 중...</div>
       ) : clusters.length === 0 ? (
         <div className="card-bg rounded-xl py-16 flex flex-col items-center gap-3 text-gray-500">
           <Monitor className="w-10 h-10 opacity-20" />
           <p className="text-sm">등록된 클러스터가 없습니다. 먼저 클러스터를 추가하세요.</p>
         </div>
-      ) : filtered.length === 0 ? (
-        <div className="card-bg rounded-xl py-16 flex flex-col items-center gap-3 text-gray-500">
-          <Monitor className="w-10 h-10 opacity-20" />
-          <p className="text-sm">{items.length === 0 ? '등록된 서비스가 없습니다.' : '필터에 맞는 서비스가 없습니다.'}</p>
-          {items.length === 0 && (
-            <button onClick={() => setScanOpen(true)} className="text-xs text-blue-400 hover:text-blue-300 underline">
-              자동 스캔으로 등록해 보세요
-            </button>
-          )}
-        </div>
       ) : (
-        <div className="space-y-3">
-          {filtered.map(svc => (
-            <ServiceRow key={svc.id} svc={svc} clusterId={clusterId} onChanged={load} />
-          ))}
-        </div>
+        <NodeServices
+          nodes={liveNodes}
+          catalogByName={catalogByName}
+          clusterId={clusterId}
+          presetTypes={presetTypes}
+          filterText={filter}
+          isOperator={isOperator}
+          onAfter={load}
+        />
       )}
     </div>
   )
