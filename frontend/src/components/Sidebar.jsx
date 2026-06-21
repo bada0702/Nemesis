@@ -11,7 +11,6 @@ const MENU = [
   { label: '대시보드', icon: LayoutDashboard, path: '/' },
 
   { label: '클러스터', icon: GitBranch, path: null, children: [
-    { label: '트리 뷰',      path: '/clusters/tree'     },
     { label: '클러스터 목록', path: '/ha/groups'         },
     { label: '클러스터 설정', path: '/settings/clusters' },
     { label: 'HA 운영 절차', path: '/ha/sequence'       },

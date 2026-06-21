@@ -1,8 +1,63 @@
 import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Server, Zap, RefreshCw } from 'lucide-react'
+import { Server, Zap, RefreshCw, ChevronRight, Bot } from 'lucide-react'
 import { getClusters, getClusterStatus } from '../../api/client'
 import { statusBadge, dot } from '../../lib/utils'
+
+const ROLE_BADGE = {
+  PRIMARY:    'text-sky-400 border-sky-500/30 bg-sky-500/10',
+  STANDBY:    'text-emerald-400 border-emerald-500/30 bg-emerald-500/10',
+  FAULT:      'text-red-400 border-red-500/30 bg-red-500/10',
+  RECOVERING: 'text-amber-400 border-amber-500/30 bg-amber-500/10',
+}
+
+// 노드 + 그 노드의 트리뷰 내용(서비스 목록 + 에이전트 상태)
+function NodeTreeRow({ node }) {
+  const [open, setOpen] = useState(true)
+  const procs   = node.metrics?.processes ?? []
+  const running = procs.filter(p => p.status === 'running').length
+  const agentUp = node.lastSeenAt != null && (Date.now() - new Date(node.lastSeenAt).getTime()) < 30_000
+  const toneIcon = node.state === 'STOPPED' || node.role === 'FAULT' ? 'text-red-400'
+    : node.role === 'PRIMARY' ? 'text-sky-400'
+    : node.role === 'RECOVERING' ? 'text-amber-400' : 'text-emerald-400'
+
+  return (
+    <div className="border border-gray-800 rounded-lg overflow-hidden">
+      <div className="flex items-center gap-2 px-4 py-2.5 cursor-pointer hover:bg-white/[0.03]" onClick={() => setOpen(o => !o)}>
+        <ChevronRight className={`w-4 h-4 text-gray-600 transition-transform ${open ? 'rotate-90' : ''}`} />
+        <Server className={`w-4 h-4 ${toneIcon}`} />
+        <span className="text-sm font-bold text-white">{node.hostname ?? '—'}</span>
+        <span className={`text-[9px] font-bold border rounded px-1.5 py-0.5 ${ROLE_BADGE[node.role] ?? 'text-gray-400 border-gray-700'}`}>
+          {node.role ?? '-'}
+        </span>
+        <span className="text-[10px] text-gray-600 font-mono">{node.ipAddress ?? '—'}</span>
+        <span className="ml-auto text-[10px] text-gray-500 font-mono">서비스 {running}/{procs.length}</span>
+      </div>
+      {open && (
+        <div className="border-t border-gray-800/60 divide-y divide-gray-800/30 bg-black/10">
+          {procs.length === 0 ? (
+            <p className="text-[11px] text-gray-600 pl-9 py-2">서비스 없음</p>
+          ) : procs.map((p, i) => (
+            <div key={`${p.name}-${i}`} className="flex items-center gap-2 pl-9 pr-4 py-1.5">
+              <span className={`w-1.5 h-1.5 rounded-full ${p.status === 'running' ? 'bg-emerald-400' : 'bg-red-400'}`} />
+              <span className="text-[12px] text-gray-300">{p.name}</span>
+              <span className={`ml-auto text-[10px] font-mono font-bold ${p.status === 'running' ? 'text-emerald-400' : 'text-red-400'}`}>
+                {p.status ?? 'unknown'}
+              </span>
+            </div>
+          ))}
+          <div className="flex items-center gap-2 pl-9 pr-4 py-1.5">
+            <Bot className="w-3.5 h-3.5 text-indigo-400/70" />
+            <span className="text-[12px] text-gray-400">Nemesis Agent</span>
+            <span className={`ml-auto text-[10px] font-mono font-bold ${agentUp ? 'text-emerald-400' : 'text-red-400'}`}>
+              {agentUp ? 'connected' : 'offline'}
+            </span>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
 
 export default function HaGroups() {
   const [clusters, setClusters] = useState([])
@@ -77,73 +132,25 @@ export default function HaGroups() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-3 gap-4">
-                  {/* Primary */}
-                  <div className="bg-blue-900/20 rounded-lg p-4 border border-blue-500/30">
-                    <p className="text-[10px] text-blue-400 font-bold mb-2">PRIMARY</p>
-                    <div className="flex items-center gap-2">
-                      <Server className="w-8 h-8 text-blue-400" />
-                      <div>
-                        <p className="text-sm font-bold text-white">{primary?.hostname ?? '—'}</p>
-                        <p className="text-xs text-gray-500">{primary?.ipAddress ?? ''}</p>
-                      </div>
-                    </div>
-                    {primary?.metrics && (
-                      <div className="mt-3 grid grid-cols-3 gap-1 text-[10px]">
-                        {[['CPU', primary.metrics.cpuPercent], ['MEM', primary.metrics.memoryPercent], ['DISK', primary.metrics.diskPercent]].map(([k, v]) => (
-                          <div key={k} className="bg-black/20 rounded p-1 text-center">
-                            <p className="text-gray-500">{k}</p>
-                            <p className="text-white font-bold">{v?.toFixed(0) ?? 0}%</p>
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                {/* 동기화 상태 바 */}
+                <div className="flex items-center gap-3 mb-4">
+                  <div className={`text-xs font-bold ${hasFault ? 'text-red-400' : 'text-green-400'}`}>
+                    {hasFault ? '⚠ DEGRADED' : '✓ SYNC OK'}
                   </div>
-
-                  {/* Sync */}
-                  <div className="flex flex-col items-center justify-center gap-2">
-                    <div className={`text-xs font-bold ${hasFault ? 'text-red-400' : 'text-green-400'}`}>
-                      {hasFault ? '⚠ DEGRADED' : '✓ SYNC OK'}
-                    </div>
-                    <div className="w-full h-1.5 bg-gray-800 rounded-full overflow-hidden">
-                      <div className={`h-full rounded-full ${hasFault ? 'bg-red-500' : 'bg-green-500 animate-pulse'}`} style={{ width: hasFault ? '30%' : '100%' }} />
-                    </div>
-                    <p className="text-[10px] text-gray-600">Active / Standby</p>
+                  <div className="flex-1 h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                    <div className={`h-full rounded-full ${hasFault ? 'bg-red-500' : 'bg-green-500 animate-pulse'}`} style={{ width: hasFault ? '30%' : '100%' }} />
                   </div>
-
-                  {/* Standby */}
-                  <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700">
-                    <p className="text-[10px] text-gray-400 font-bold mb-2">STANDBY</p>
-                    <div className="flex items-center gap-2">
-                      <Server className="w-8 h-8 text-gray-500" />
-                      <div>
-                        <p className="text-sm font-bold text-white">{standby?.hostname ?? '—'}</p>
-                        <p className="text-xs text-gray-500">{standby?.ipAddress ?? ''}</p>
-                      </div>
-                    </div>
-                    {standby?.metrics && (
-                      <div className="mt-3 grid grid-cols-3 gap-1 text-[10px]">
-                        {[['CPU', standby.metrics.cpuPercent], ['MEM', standby.metrics.memoryPercent], ['DISK', standby.metrics.diskPercent]].map(([k, v]) => (
-                          <div key={k} className="bg-black/20 rounded p-1 text-center">
-                            <p className="text-gray-500">{k}</p>
-                            <p className="text-white font-bold">{v?.toFixed(0) ?? 0}%</p>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                  <p className="text-[10px] text-gray-600">Active / Standby</p>
                 </div>
 
-                {/* 이외 노드 */}
-                {(c.nodes?.length ?? 0) > 2 && (
-                  <div className="mt-3 flex gap-2 flex-wrap">
-                    {c.nodes.slice(2).map(n => (
-                      <span key={n.nodeId} className={`${statusBadge(n.role)} text-[10px]`}>
-                        {n.hostname} ({n.role})
-                      </span>
-                    ))}
-                  </div>
-                )}
+                {/* 노드별 트리 — 각 노드 밑에 서비스/에이전트 */}
+                <div className="space-y-2">
+                  {(c.nodes?.length ?? 0) === 0 ? (
+                    <p className="text-xs text-gray-600 py-2">등록된 노드가 없습니다.</p>
+                  ) : (
+                    c.nodes.map(n => <NodeTreeRow key={n.nodeId} node={n} />)
+                  )}
+                </div>
               </div>
             )
           })}
