@@ -22,6 +22,10 @@
 #   svc-stop   <name>                   서비스 종료
 #   svc-restart <name>                  서비스 재시작
 #   svc-status <name>                   서비스 상태(running=0)
+#   dir-list  <path>                    하위 디렉토리 목록(TSV, 읽기전용)
+#   dir-sync  <destHbIp> <src> <dst> [--delete] [--exclude=PAT]  rsync over SSH
+#   ssh-keygen-nemesis                  rsync용 SSH 키 생성, 공개키 출력(멱등)
+#   ssh-authorize <pubkey>              peer 공개키 신뢰 등록(멱등)
 # =============================================================================
 export LC_ALL=C LANG=C
 
@@ -223,6 +227,72 @@ docker_images() {
 }
 
 # ----------------------------------------------------------------------------
+# Phase: 폴더 동기화(dir-sync)
+# ----------------------------------------------------------------------------
+# rsync 전용 SSH 계정. install.sh가 보장(없으면 root 홈 폴백).
+SYNC_USER=${NEMESIS_SYNC_USER:-nemesis}
+
+_sync_home() {
+  h=$(eval echo "~${SYNC_USER}" 2>/dev/null)
+  case "$h" in ~*|"") h="/home/${SYNC_USER}" ;; esac
+  [ -d "$h" ] || h=$(eval echo ~ 2>/dev/null)
+  echo "$h"
+}
+
+# 읽기전용: 지정 경로의 하위 디렉토리만 TSV(name\tdir)로 출력
+dir_list() {
+  path=$1; [ -n "$path" ] || usage
+  [ -d "$path" ] || { log "경로 없음: $path"; exit 2; }
+  ls -1Ap "$path" 2>/dev/null | grep '/$' | sed 's#/$##' | while IFS= read -r d; do
+    printf '%s\tdir\n' "$d"
+  done
+}
+
+# active에서 실행: heartbeat IP로 standby에 rsync over SSH
+dir_sync() {
+  dest_ip=$1; src=$2; dst=$3
+  [ -n "$dest_ip" ] && [ -n "$src" ] && [ -n "$dst" ] || usage
+  [ $# -ge 3 ] && shift 3 || shift $#
+  has rsync || die "rsync 미설치"
+  flags="-az --stats"
+  for a in "$@"; do
+    case "$a" in
+      --delete)    flags="$flags --delete" ;;
+      --exclude=*) flags="$flags --exclude=${a#--exclude=}" ;;
+    esac
+  done
+  ssh_opts="ssh -o StrictHostKeyChecking=accept-new -o BatchMode=yes -o ConnectTimeout=10"
+  # shellcheck disable=SC2086
+  out=$(rsync $flags -e "$ssh_opts" "$src/" "${SYNC_USER}@${dest_ip}:${dst}/" 2>&1) \
+    || { log "rsync 실패: $out"; exit 1; }
+  files=$(printf '%s\n' "$out" | sed -n 's/^Number of regular files transferred: *//p' | tr -d ', ')
+  bytes=$(printf '%s\n' "$out" | sed -n 's/^Total transferred file size: *//p' | sed 's/ bytes//' | tr -d ', ')
+  echo "NEMESIS_SYNC {\"files\":${files:-0},\"bytes\":${bytes:-0}}"
+  exit 0
+}
+
+# SSH 키쌍 없으면 생성, 공개키 출력(멱등)
+ssh_keygen_nemesis() {
+  d="$(_sync_home)/.ssh"
+  mkdir -p "$d"; chmod 700 "$d"
+  key="$d/id_ed25519"
+  [ -f "$key" ] || ssh-keygen -t ed25519 -N "" -f "$key" -q || die "키 생성 실패"
+  chown -R "${SYNC_USER}" "$d" 2>/dev/null || true
+  cat "${key}.pub" || die "공개키 읽기 실패"
+}
+
+# peer 공개키를 authorized_keys에 멱등 추가
+ssh_authorize() {
+  pub="$*"; [ -n "$pub" ] || usage
+  d="$(_sync_home)/.ssh"
+  mkdir -p "$d"; chmod 700 "$d"
+  ak="$d/authorized_keys"; touch "$ak"; chmod 600 "$ak"
+  grep -qF "$pub" "$ak" || echo "$pub" >> "$ak"
+  chown -R "${SYNC_USER}" "$d" 2>/dev/null || true
+  log "authorized"; exit 0
+}
+
+# ----------------------------------------------------------------------------
 # 디스패치
 # ----------------------------------------------------------------------------
 SUB=$1; [ -n "$SUB" ] || usage; shift
@@ -240,5 +310,9 @@ case "$SUB" in
   svc-status)  svc_status "$1" ;;
   docker-ps)     docker_ps ;;
   docker-images) docker_images ;;
+  dir-list)           dir_list "$1" ;;
+  dir-sync)           dir_sync "$@" ;;
+  ssh-keygen-nemesis) ssh_keygen_nemesis ;;
+  ssh-authorize)      ssh_authorize "$@" ;;
   *)           log "알 수 없는 서브커맨드: $SUB"; usage ;;
 esac
