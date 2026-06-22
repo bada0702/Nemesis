@@ -59,6 +59,17 @@ public class AiOperatorClient {
         }
     }
 
+    public ScanResponse scan(Map<String, Object> ctx, Map<String, Object> sshTarget) {
+        try {
+            HttpEntity<Map<String, Object>> req =
+                    new HttpEntity<>(Map.of("context", ctx, "sshTarget", sshTarget), headers());
+            return rt.postForObject(props.getBaseUrl() + "/ai/scan", req, ScanResponse.class);
+        } catch (Exception e) {
+            log.warn("aibot scan 실패(폴백): {}", e.getMessage());
+            return null;
+        }
+    }
+
     public ExecuteResponse execute(UUID proposalId, List<Action> actions, Map<String, Object> sshTarget) {
         try {
             HttpEntity<Map<String, Object>> req = new HttpEntity<>(Map.of(

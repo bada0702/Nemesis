@@ -75,6 +75,20 @@ public class AiOperatorService {
         return repo.save(p);
     }
 
+    /** SP3: 능동 모니터링 finding의 심각 조치를 PENDING 제안으로 생성. */
+    @Transactional
+    public AiProposal createFindingProposal(UUID clusterId, UUID nodeId, String triggerReason, ScanFinding f) {
+        AiProposal p = AiProposal.builder()
+                .id(UUID.randomUUID()).clusterId(clusterId).nodeId(nodeId)
+                .triggerType("MONITOR").triggerReason(triggerReason)
+                .diagnosis(f.diagnosis()).rootCause(f.rootCause()).confidence(f.confidence())
+                .proposedActions(toJson(f.proposedActions()))
+                .status(AiProposal.PENDING)
+                .expiresAt(OffsetDateTime.now().plusMinutes(props.getProposalTtlMinutes()))
+                .build();
+        return repo.save(p);
+    }
+
     @Transactional
     public AiProposal reject(UUID proposalId, String user) {
         AiProposal p = repo.findById(proposalId)
