@@ -48,6 +48,16 @@ export const getConfigSnapshots    = (id)       => client.get(`/clusters/${id}/c
 export const restoreConfigSnapshot = (id, sid)  => client.post(`/clusters/${id}/config/snapshots/${sid}/restore`)
 export const deleteConfigSnapshot  = (id, sid)  => client.delete(`/clusters/${id}/config/snapshots/${sid}`)
 export const syncClusterConfig     = (id)       => client.post(`/clusters/${id}/config/sync`)
+
+// 폴더 동기화(Directory Sync)
+export const getSyncJobs       = (cid)        => client.get(`/clusters/${cid}/sync/jobs`)
+export const createSyncJob     = (cid, d)     => client.post(`/clusters/${cid}/sync/jobs`, d)
+export const updateSyncJob     = (cid, jid, d)=> client.put(`/clusters/${cid}/sync/jobs/${jid}`, d)
+export const deleteSyncJob     = (cid, jid)   => client.delete(`/clusters/${cid}/sync/jobs/${jid}`)
+export const runSyncJob        = (cid, jid)   => client.post(`/clusters/${cid}/sync/jobs/${jid}/run`)
+export const getSyncHistory    = (cid)        => client.get(`/clusters/${cid}/sync/history`)
+export const provisionSyncSsh  = (cid)        => client.post(`/clusters/${cid}/sync/provision-ssh`)
+export const browseNodeDirs    = (cid, nid, path) => client.get(`/clusters/${cid}/nodes/${nid}/dirs`, { params: { path } })
 export const controlAppService  = (id, data)     => client.post(`/clusters/${id}/apps/control`, data)
 export const getAiAnalysis      = (id)           => client.get(`/clusters/${id}/ai-analysis`)
 

@@ -7,6 +7,7 @@ import {
 } from '../api/client'
 import { useAuth } from '../auth/AuthContext'
 import ClusterTopologyPanel from '../components/ClusterTopologyPanel'
+import DirSyncPanel from '../components/DirSyncPanel'
 
 const OS_TYPES = ['Linux', 'AIX', 'RHEL', 'Ubuntu', 'CentOS']
 const ROLES    = ['PRIMARY', 'STANDBY']
@@ -542,6 +543,9 @@ export default function ClusterSettings() {
 
       {/* VIP 실제 적용 상태 */}
       {cluster && <VipStatusPanel clusterId={id} vip={cluster.vip} />}
+
+      {/* 폴더 동기화 */}
+      <DirSyncPanel clusterId={id} nodes={nodes} />
 
       {/* 노드 관리 */}
       <div>
