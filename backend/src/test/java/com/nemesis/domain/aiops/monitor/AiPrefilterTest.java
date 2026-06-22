@@ -60,4 +60,24 @@ class AiPrefilterTest {
         List<Suspect> third = prefilter.evaluate();           // 3회 → 발생
         assertThat(third).anyMatch(x -> x.signalType().equals(AiFinding.CPU_SUSTAINED));
     }
+
+    @Test void logErrorPatternCarriesErrorSample() {
+        MetricsPushRequest mx = m(10, 10, 10);
+        mx.setErrorLogPreview(List.of(
+                "ORA-00257: archiver error. Connect AS SYSDBA only until resolved",
+                "ORA-16038: log 3 sequence# 215 cannot be archived",
+                "ORA-00257: archiver error",
+                "extra-1", "extra-2"));
+        when(metrics.getAll()).thenReturn(Map.of(nodeId, mx));
+
+        Suspect log = prefilter.evaluate().stream()
+                .filter(x -> x.signalType().equals(AiFinding.LOG_ERROR_PATTERN))
+                .findFirst().orElseThrow();
+
+        assertThat(log.detail()).containsEntry("errorCount", 5);
+        Object errors = log.detail().get("errors");
+        assertThat(errors).isInstanceOf(List.class);
+        assertThat((List<?>) errors).isNotEmpty()
+                .anyMatch(line -> String.valueOf(line).contains("ORA-00257"));
+    }
 }

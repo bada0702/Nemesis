@@ -19,16 +19,48 @@ public class AiFindingService {
     private final AiFindingRepository repo;
     private final AiOperatorService ops;
     private final ObjectMapper mapper;
+    private final com.nemesis.domain.ai.llm.LlmService llm;
 
-    public AiFindingService(AiFindingRepository repo, AiOperatorService ops, ObjectMapper mapper) {
-        this.repo = repo; this.ops = ops; this.mapper = mapper;
+    public AiFindingService(AiFindingRepository repo, AiOperatorService ops, ObjectMapper mapper,
+                            com.nemesis.domain.ai.llm.LlmService llm) {
+        this.repo = repo; this.ops = ops; this.mapper = mapper; this.llm = llm;
     }
 
     @Transactional
     public void recordWarn(Suspect s) {
-        AiFinding f = touchOrCreate(s);
+        String fp = AiFinding.fingerprint(s.nodeId(), s.signalType());
+        Optional<AiFinding> open = repo.findByFingerprintAndStatus(fp, AiFinding.OPEN);
+        if (open.isPresent()) {                 // 기존 열림 → lastSeen만 갱신(LLM 재호출 안 함: 비용 한정)
+            AiFinding f = open.get();
+            f.setLastSeenAt(OffsetDateTime.now());
+            f.setSummary(summary(s));
+            repo.save(f);
+            return;
+        }
+        AiFinding f = newFinding(s);
         f.setSummary(summary(s));
+        explainErrorPattern(s, f);              // 신규일 때만 SSH 없는 경량 LLM 설명
         repo.save(f);
+    }
+
+    /** LOG_ERROR_PATTERN 신규 finding은 캐시된 에러 텍스트만으로 LLM 설명을 붙인다(SSH 불필요). */
+    private void explainErrorPattern(Suspect s, AiFinding f) {
+        if (!AiFinding.LOG_ERROR_PATTERN.equals(s.signalType())) return;
+        if (llm == null || !llm.isAvailable()) return;     // 미설정이면 조용히 생략(HA 폴백 철학)
+        String errorText = errorText(s.detail());
+        if (errorText.isBlank()) return;
+        Map<String, Object> r = llm.analyze(errorText);
+        Object rc = r != null ? r.get("rootCause") : null;
+        if (rc != null) f.setDiagnosis(String.valueOf(rc));
+    }
+
+    @SuppressWarnings("unchecked")
+    private String errorText(Map<String, Object> detail) {
+        if (detail == null) return "";
+        Object e = detail.get("errors");
+        if (e instanceof List<?> list)
+            return list.stream().map(String::valueOf).reduce((a, b) -> a + "\n" + b).orElse("");
+        return "";
     }
 
     @Transactional
@@ -64,13 +96,6 @@ public class AiFindingService {
         }
     }
 
-    private AiFinding touchOrCreate(Suspect s) {
-        String fp = AiFinding.fingerprint(s.nodeId(), s.signalType());
-        return repo.findByFingerprintAndStatus(fp, AiFinding.OPEN).map(f -> {
-            f.setLastSeenAt(OffsetDateTime.now());
-            return f;
-        }).orElseGet(() -> newFinding(s));
-    }
     private AiFinding newFinding(Suspect s) {
         return AiFinding.builder()
                 .id(UUID.randomUUID()).clusterId(s.clusterId()).nodeId(s.nodeId())
@@ -81,7 +106,17 @@ public class AiFindingService {
                 .createdAt(OffsetDateTime.now())
                 .build();
     }
-    private String summary(Suspect s) { return s.signalType() + " @ " + s.hostname() + " " + s.detail(); }
+    @SuppressWarnings("unchecked")
+    private String summary(Suspect s) {
+        if (AiFinding.LOG_ERROR_PATTERN.equals(s.signalType()) && s.detail() != null) {
+            Object cnt = s.detail().get("errorCount");
+            Object errs = s.detail().get("errors");
+            String first = (errs instanceof List<?> l && !l.isEmpty()) ? String.valueOf(l.get(0)) : "";
+            return "에러 로그 " + (cnt != null ? cnt : "?") + "건 @ " + s.hostname()
+                    + (first.isBlank() ? "" : " — " + first);
+        }
+        return s.signalType() + " @ " + s.hostname() + " " + s.detail();
+    }
     private String toJson(Object o) {
         try { return mapper.writeValueAsString(o); } catch (Exception e) { return "{}"; }
     }

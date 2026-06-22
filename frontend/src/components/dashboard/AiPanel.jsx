@@ -132,6 +132,11 @@ export default function AiPanel({ messages, className = '' }) {
                 <span className="text-[10px] opacity-80">{f.severity}</span>
               </div>
               <p className="text-gray-300 mt-0.5 truncate" title={f.summary}>{f.summary}</p>
+              {f.diagnosis && (
+                <p className="text-gray-400 mt-1 text-[11px] leading-snug" title={f.diagnosis}>
+                  <span className="text-blue-300">AI</span> {f.diagnosis}
+                </p>
+              )}
               {f.proposalId && (
                 <span className="text-[10px] text-amber-300">조치 제안 연결됨 ↓</span>
               )}

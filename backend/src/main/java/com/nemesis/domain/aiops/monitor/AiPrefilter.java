@@ -18,6 +18,7 @@ public class AiPrefilter {
     private final NodeRepository nodeRepo;
     private final AiOperatorProperties props;
     private final Map<UUID, Integer> cpuStreak = new ConcurrentHashMap<>();
+    private static final int ERROR_SAMPLE_MAX = 5;   // detail에 담을 에러 라인 최대치
 
     public AiPrefilter(MetricsCacheService metrics, NodeRepository nodeRepo, AiOperatorProperties props) {
         this.metrics = metrics; this.nodeRepo = nodeRepo; this.props = props;
@@ -54,8 +55,10 @@ public class AiPrefilter {
 
             List<String> errs = mx.getErrorLogPreview();
             if (errs != null && errs.size() >= cfg.getErrorPatternCount()) {
+                // 실제 에러 텍스트 샘플을 함께 운반 → SSH 없이 LLM 설명/표시에 사용.
+                List<String> sample = new ArrayList<>(errs.subList(0, Math.min(errs.size(), ERROR_SAMPLE_MAX)));
                 out.add(suspect(node, cid, role, AiFinding.LOG_ERROR_PATTERN, AiFinding.WARN,
-                        Map.of("errorCount", errs.size())));
+                        Map.of("errorCount", errs.size(), "errors", sample)));
             }
         }
         return out;
