@@ -31,8 +31,9 @@ export default function Navbar({ onMenuToggle }) {
   const location = useLocation()
   const { user, logout } = useAuth()
   const [now, setNow] = useState('')
-  const [notif, setNotif] = useState({ pending: 0, recent: [] })
+  const [notif, setNotif] = useState({ pending: 0, recent: [], openFindings: 0, recentFindings: [] })
   const [open, setOpen] = useState(false)
+  const alertCount = (notif.pending ?? 0) + (notif.openFindings ?? 0)
 
   useEffect(() => {
     let alive = true
@@ -83,21 +84,28 @@ export default function Navbar({ onMenuToggle }) {
           <div className="relative">
             <button onClick={() => setOpen(o => !o)} className="relative p-1" aria-label="알림">
               <Bell className="w-5 h-5 text-gray-400" />
-              {notif.pending > 0 && (
+              {alertCount > 0 && (
                 <span className="absolute -top-1 -right-1 flex h-4 min-w-4 px-1 items-center justify-center rounded-full bg-red-500 text-[10px] text-white">
-                  {notif.pending}
+                  {alertCount}
                 </span>
               )}
             </button>
             {open && (
               <div className="absolute right-0 mt-2 w-72 bg-gray-900 border border-gray-700 rounded-lg shadow-xl z-50 p-2 text-xs">
-                <p className="text-gray-400 px-2 py-1">AI 알림 (대기 {notif.pending})</p>
-                {notif.recent.length === 0 && <p className="text-gray-600 px-2 py-2">알림 없음</p>}
+                <p className="text-gray-400 px-2 py-1">AI 알림 (제안 대기 {notif.pending} · 열린 이슈 {notif.openFindings ?? 0})</p>
+                {(notif.recentFindings ?? []).map(f => (
+                  <div key={f.id} className="px-2 py-1.5 border-t border-gray-800 text-gray-300">
+                    <span className="text-red-400">[{f.severity}]</span> {f.signalType} — {f.summary}
+                  </div>
+                ))}
                 {notif.recent.map(n => (
                   <div key={n.id} className="px-2 py-1.5 border-t border-gray-800 text-gray-300">
                     <span className="text-amber-400">[{n.status}]</span> {n.triggerReason}
                   </div>
                 ))}
+                {notif.recent.length === 0 && (notif.recentFindings ?? []).length === 0 && (
+                  <p className="text-gray-600 px-2 py-2">알림 없음</p>
+                )}
               </div>
             )}
           </div>

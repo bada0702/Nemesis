@@ -123,6 +123,7 @@ export const getAiProposal      = (id)      => client.get(`/ai/proposals/${id}`)
 export const approveAiProposal  = (id)      => client.post(`/ai/proposals/${id}/approve`)
 export const rejectAiProposal   = (id)      => client.post(`/ai/proposals/${id}/reject`)
 export const getAiNotifications = ()        => client.get('/ai/notifications')
+export const getAiFindings      = (status)  => client.get('/ai/findings', { params: status ? { status } : {} })
 
 // AI 장애 분석
 export const triggerAiAnalysis   = (nodeId)        => client.post(`/ai/analyze/${nodeId}`)

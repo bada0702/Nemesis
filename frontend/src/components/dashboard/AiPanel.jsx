@@ -1,8 +1,15 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Cpu, Bot, Send, User } from 'lucide-react'
-import { aiChat, getAiProposals, approveAiProposal, rejectAiProposal } from '../../api/client'
+import { aiChat, getAiProposals, approveAiProposal, rejectAiProposal, getAiFindings } from '../../api/client'
 import { useAuth } from '../../auth/AuthContext'
+
+const SEV_CLS = {
+  CRITICAL: 'border-red-600/50 bg-red-500/10 text-red-300',
+  HIGH:     'border-red-500/40 bg-red-500/5 text-red-300',
+  WARN:     'border-amber-500/40 bg-amber-500/5 text-amber-300',
+  INFO:     'border-sky-500/40 bg-sky-500/5 text-sky-300',
+}
 
 export default function AiPanel({ messages, className = '' }) {
   const [input,    setInput]    = useState('')
@@ -13,11 +20,14 @@ export default function AiPanel({ messages, className = '' }) {
   const list       = messages ?? []
   const { isOperator } = useAuth()
   const [proposals, setProposals] = useState([])
+  const [findings,  setFindings]  = useState([])
 
   useEffect(() => {
     let alive = true
-    const load = () => getAiProposals('PENDING')
-      .then(r => { if (alive) setProposals(r.data) }).catch(() => {})
+    const load = () => {
+      getAiProposals('PENDING').then(r => { if (alive) setProposals(r.data) }).catch(() => {})
+      getAiFindings('OPEN').then(r => { if (alive) setFindings(r.data) }).catch(() => {})
+    }
     load()
     const id = setInterval(load, 10000)
     return () => { alive = false; clearInterval(id) }
@@ -111,6 +121,24 @@ export default function AiPanel({ messages, className = '' }) {
         )}
         <div ref={bottomRef} />
       </div>
+
+      {findings.length > 0 && (
+        <div className="mb-3 space-y-1.5">
+          <p className="text-[10px] uppercase tracking-widest text-gray-500">열린 이슈 {findings.length}</p>
+          {findings.map(f => (
+            <div key={f.id} className={`rounded-lg border px-3 py-2 text-xs ${SEV_CLS[f.severity] ?? 'border-gray-700 bg-gray-800/40 text-gray-300'}`}>
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-bold">{f.signalType}</span>
+                <span className="text-[10px] opacity-80">{f.severity}</span>
+              </div>
+              <p className="text-gray-300 mt-0.5 truncate" title={f.summary}>{f.summary}</p>
+              {f.proposalId && (
+                <span className="text-[10px] text-amber-300">조치 제안 연결됨 ↓</span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
 
       {proposals.length > 0 && (
         <div className="mb-3 space-y-2">
