@@ -15,4 +15,22 @@ public class AiOperatorProperties {
     private String  sshUser = "root";
     private int     timeoutSeconds = 120;
     private int     proposalTtlMinutes = 30;
+
+    /** SP3: 능동 모니터링 설정. nemesis.aiops.monitor.* */
+    private final Monitor monitor = new Monitor();
+    public Monitor getMonitor() { return monitor; }
+
+    @Getter @Setter
+    public static class Monitor {
+        private boolean enabled = false;
+        private long intervalMs = 300_000L;
+        private int diskThreshold = 90;
+        private int memThreshold = 90;
+        private int cpuThreshold = 90;
+        private int cpuSustainedCycles = 3;
+        private int criticalBandOffset = 5;
+        private int errorPatternCount = 3;
+        private long eventSpikeWindowMs = 600_000L;
+        private int eventSpikeCount = 5;
+    }
 }

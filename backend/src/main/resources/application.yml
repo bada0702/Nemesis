@@ -57,6 +57,17 @@ nemesis:
     ssh-user: ${NEMESIS_AIOPS_SSH_USER:root}
     timeout-seconds: ${NEMESIS_AIOPS_TIMEOUT:120}
     proposal-ttl-minutes: ${NEMESIS_AIOPS_TTL:30}
+    monitor:
+      enabled: ${NEMESIS_AIOPS_MONITOR_ENABLED:false}
+      interval-ms: ${NEMESIS_AIOPS_MONITOR_INTERVAL_MS:300000}
+      disk-threshold: ${NEMESIS_AIOPS_MONITOR_DISK:90}
+      mem-threshold: ${NEMESIS_AIOPS_MONITOR_MEM:90}
+      cpu-threshold: ${NEMESIS_AIOPS_MONITOR_CPU:90}
+      cpu-sustained-cycles: ${NEMESIS_AIOPS_MONITOR_CPU_CYCLES:3}
+      critical-band-offset: ${NEMESIS_AIOPS_MONITOR_CRIT_OFFSET:5}
+      error-pattern-count: ${NEMESIS_AIOPS_MONITOR_ERR_COUNT:3}
+      event-spike-window-ms: ${NEMESIS_AIOPS_MONITOR_SPIKE_WINDOW_MS:600000}
+      event-spike-count: ${NEMESIS_AIOPS_MONITOR_SPIKE_COUNT:5}
 
 logging:
   level:
