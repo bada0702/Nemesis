@@ -52,7 +52,8 @@ public class RbacFilter extends OncePerRequestFilter {
     }
 
     private Need requirement(String method, String path) {
-        if (!"POST".equalsIgnoreCase(method) && !"DELETE".equalsIgnoreCase(method)) return Need.NONE;
+        if (!"POST".equalsIgnoreCase(method) && !"DELETE".equalsIgnoreCase(method)
+                && !"PUT".equalsIgnoreCase(method)) return Need.NONE;
         if ("POST".equalsIgnoreCase(method) && path.equals("/api/auth/users")) return Need.ADMIN;
         if (path.endsWith("/failover"))                  return Need.OPERATOR;  // POST /api/clusters/{id}/failover
         if (path.endsWith("/vip/apply"))                 return Need.OPERATOR;  // POST /api/clusters/{id}/vip/apply
@@ -61,6 +62,8 @@ public class RbacFilter extends OncePerRequestFilter {
         if (path.matches("/api/ai/proposals/[^/]+/(approve|reject)")) return Need.OPERATOR;
         if (path.matches("/api/clusters/[^/]+/config/snapshots/[^/]+/restore")) return Need.OPERATOR;
         if (path.matches("/api/clusters/[^/]+/config/sync")) return Need.OPERATOR;
+        if (path.matches("/api/clusters/[^/]+/sync/jobs.*"))          return Need.OPERATOR; // POST/PUT/DELETE/run
+        if (path.matches("/api/clusters/[^/]+/sync/provision-ssh"))   return Need.OPERATOR;
         return Need.NONE;
     }
 
