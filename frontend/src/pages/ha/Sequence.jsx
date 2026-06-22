@@ -2,10 +2,10 @@ import React, { useEffect, useState, useCallback } from 'react'
 import {
   GitBranch, ChevronUp, ChevronDown, Plus, Trash2, Edit2,
   RefreshCw, Save, Zap, Power, PowerOff, ArrowRightLeft, Clock, ClipboardList, Check, Play, SkipForward,
+  PlayCircle, XCircle, CheckCircle2, AlertCircle, Loader2,
 } from 'lucide-react'
-import { getClusters, getHaSequences, updateHaSequences, getRunbook, createRunbook, updateRunbookStep } from '../../api/client'
+import { getClusters, getHaSequences, updateHaSequences, executeHaSequence, getRunbook, createRunbook, updateRunbookStep, deleteRunbook } from '../../api/client'
 import { fmt } from '../../lib/utils'
-import ComingSoon from '../../components/ComingSoon'
 
 // ── 상수 ──────────────────────────────────────────────────────
 const TABS = [
@@ -28,6 +28,144 @@ const NODE_ROLES    = ['PRIMARY', 'STANDBY', 'ALL']
 const ACTIONS       = ['START', 'STOP', 'VIP_TRANSFER', 'WAIT', 'CHECK']
 
 const EMPTY_FORM = { action: 'START', serviceType: 'WEB', serviceName: '', nodeRole: 'PRIMARY', waitAfterSec: 5, description: '' }
+
+// ── 실행 확인 및 진행 모달 ────────────────────────────────────
+const EXEC_META = {
+  STARTUP:  { label: '기동 실행',     color: 'bg-green-600 hover:bg-green-700',   icon: Power,         badge: 'bg-green-500/10 text-green-400 border-green-500/30' },
+  SHUTDOWN: { label: '중지 실행',     color: 'bg-red-600 hover:bg-red-700',       icon: PowerOff,      badge: 'bg-red-500/10 text-red-400 border-red-500/30'       },
+  FAILOVER: { label: 'Failover 실행', color: 'bg-purple-600 hover:bg-purple-700', icon: ArrowRightLeft, badge: 'bg-purple-500/10 text-purple-400 border-purple-500/30' },
+}
+
+const ACTION_ICON = { START: '▶', STOP: '■', VIP_TRANSFER: '↔', WAIT: '⏱', CHECK: '✔' }
+
+function ExecuteModal({ clusterId, type, steps, onClose }) {
+  const meta = EXEC_META[type]
+  const [phase,   setPhase]   = useState('confirm')   // confirm | running | done | error
+  const [results, setResults] = useState(null)
+  const [errMsg,  setErrMsg]  = useState('')
+
+  async function run() {
+    setPhase('running')
+    try {
+      const res = await executeHaSequence(clusterId, type)
+      setResults(res.data)
+      setPhase(res.data.ok ? 'done' : 'error')
+    } catch (e) {
+      setErrMsg(e?.response?.data?.error ?? e?.response?.data?.message ?? e.message ?? '실행 실패')
+      setPhase('error')
+    }
+  }
+
+  const IconComp = meta.icon
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.8)' }}
+      onClick={e => phase !== 'running' && e.target === e.currentTarget && onClose()}>
+      <div className="card-bg w-full max-w-lg rounded-2xl p-6 space-y-4 max-h-[90vh] flex flex-col">
+
+        {/* 헤더 */}
+        <div className="flex items-center justify-between flex-shrink-0">
+          <div className="flex items-center gap-2">
+            <IconComp className="w-5 h-5 text-white" />
+            <span className="text-sm font-bold text-white">{meta.label}</span>
+            <span className={`text-[9px] font-bold border rounded px-1.5 py-0.5 ${meta.badge}`}>{type}</span>
+          </div>
+          {phase !== 'running' && (
+            <button onClick={onClose} className="text-gray-500 hover:text-white">
+              <XCircle className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+
+        {/* 확인 단계 */}
+        {phase === 'confirm' && (
+          <>
+            <div className="bg-gray-900/60 rounded-xl p-4 space-y-2 overflow-y-auto flex-1">
+              <p className="text-[10px] text-gray-500 uppercase tracking-widest mb-3">실행될 단계 ({steps.length}개)</p>
+              {steps.map((s, i) => (
+                <div key={i} className="flex items-center gap-2 text-xs">
+                  <span className="w-5 text-gray-600 text-right font-mono">{i + 1}.</span>
+                  <span className="text-gray-500 font-mono w-14 flex-shrink-0">{ACTION_ICON[s.action]} {s.action}</span>
+                  <span className="text-white">{s.serviceName || '—'}</span>
+                  {s.nodeRole && <span className="text-gray-600 text-[10px]">@ {s.nodeRole}</span>}
+                </div>
+              ))}
+            </div>
+            <p className="text-[10px] text-amber-400 flex-shrink-0">⚠ 실행 중 단계 실패 시 즉시 중단됩니다.</p>
+            <div className="flex gap-3 flex-shrink-0">
+              <button onClick={onClose} className="flex-1 py-2.5 rounded-lg text-xs border border-gray-700 text-gray-400 hover:text-white">취소</button>
+              <button onClick={run} className={`flex-1 py-2.5 rounded-lg text-xs text-white font-bold flex items-center justify-center gap-2 ${meta.color}`}>
+                <PlayCircle className="w-3.5 h-3.5" />
+                실행 시작
+              </button>
+            </div>
+          </>
+        )}
+
+        {/* 실행 중 */}
+        {phase === 'running' && (
+          <div className="flex-1 flex flex-col items-center justify-center gap-4 py-8">
+            <Loader2 className="w-10 h-10 text-blue-400 animate-spin" />
+            <p className="text-sm text-white font-bold">절차 실행 중...</p>
+            <p className="text-xs text-gray-500">완료될 때까지 창을 닫지 마세요.</p>
+          </div>
+        )}
+
+        {/* 완료 / 에러 */}
+        {(phase === 'done' || phase === 'error') && (
+          <>
+            {/* 결과 요약 */}
+            <div className={`rounded-xl p-3 flex items-center gap-3 flex-shrink-0 ${
+              phase === 'done' ? 'bg-green-500/10 border border-green-500/30' : 'bg-red-500/10 border border-red-500/30'}`}>
+              {phase === 'done'
+                ? <CheckCircle2 className="w-5 h-5 text-green-400 flex-shrink-0" />
+                : <AlertCircle  className="w-5 h-5 text-red-400 flex-shrink-0" />}
+              <div>
+                <p className={`text-sm font-bold ${phase === 'done' ? 'text-green-400' : 'text-red-400'}`}>
+                  {phase === 'done' ? '전체 성공' : '실행 실패'}
+                </p>
+                {results && (
+                  <p className="text-[10px] text-gray-500">{results.executed}/{results.total} 단계 완료</p>
+                )}
+                {errMsg && <p className="text-[10px] text-red-400">{errMsg}</p>}
+              </div>
+            </div>
+
+            {/* 단계별 결과 */}
+            {results?.steps && (
+              <div className="overflow-y-auto flex-1 space-y-2">
+                {results.steps.map((r, i) => (
+                  <div key={i} className={`rounded-lg px-3 py-2.5 border text-xs ${
+                    r.ok ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-red-500/5 border-red-500/20'}`}>
+                    <div className="flex items-center gap-2 mb-1">
+                      {r.ok
+                        ? <Check className="w-3 h-3 text-emerald-400 flex-shrink-0" />
+                        : <XCircle className="w-3 h-3 text-red-400 flex-shrink-0" />}
+                      <span className="font-mono text-gray-400 w-5">{i + 1}.</span>
+                      <span className="text-gray-400 font-mono w-14 flex-shrink-0">{ACTION_ICON[r.action]} {r.action}</span>
+                      <span className={`font-medium ${r.ok ? 'text-white' : 'text-red-300'}`}>{r.serviceName || '—'}</span>
+                    </div>
+                    {r.nodeResults?.map(nr => (
+                      <div key={nr.node} className="ml-8 text-[10px] font-mono text-gray-500 flex items-center gap-2">
+                        <span className={nr.ok ? 'text-emerald-500' : 'text-red-500'}>●</span>
+                        {nr.node}: {nr.ok ? (nr.stdout?.split('\n')[0] || 'OK') : (nr.stderr?.split('\n')[0] || nr.error || 'FAIL')}
+                      </div>
+                    ))}
+                    {r.output && !r.nodeResults && (
+                      <div className="ml-8 text-[10px] font-mono text-gray-500">{r.output}</div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <button onClick={onClose} className="flex-shrink-0 w-full py-2.5 rounded-lg text-xs border border-gray-700 text-gray-400 hover:text-white">닫기</button>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
 
 // ── 단계 추가/수정 모달 ──────────────────────────────────────
 function StepModal({ initial, onClose, onSave }) {
@@ -236,10 +374,11 @@ function RunbookTab() {
   const [form,     setForm]     = useState({ title: '', type: 'MAINTENANCE', target: '' })
   const [saving,   setSaving]   = useState(false)
   const [stepping, setStepping] = useState({})
+  const [deleting, setDeleting] = useState(null)
 
   async function load() {
     setLoading(true)
-    try { const r = await getRunbook(); setList(r.data ?? []) }
+    try { const r = await getRunbook(); setList(r.data.items ?? []) }
     catch { /* ignore */ } finally { setLoading(false) }
   }
 
@@ -260,8 +399,36 @@ function RunbookTab() {
     finally { setStepping(s => ({ ...s, [runbookId]: false })) }
   }
 
+  async function handleDelete(rb) {
+    try { await deleteRunbook(rb.id); await load() }
+    catch { /* ignore */ }
+    finally { setDeleting(null) }
+  }
+
   return (
     <div className="space-y-5">
+      {/* 삭제 확인 */}
+      {deleting && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.75)' }}
+          onClick={e => e.target === e.currentTarget && setDeleting(null)}>
+          <div className="card-bg w-full max-w-sm rounded-2xl p-6 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-full bg-red-500/15 flex items-center justify-center">
+                <Trash2 className="w-4 h-4 text-red-400" />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-white">Runbook 삭제</p>
+                <p className="text-xs text-gray-500 mt-0.5">"{deleting.title}"을 삭제합니다.</p>
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <button onClick={() => setDeleting(null)} className="flex-1 py-2.5 rounded-lg text-xs border border-gray-700 text-gray-400">취소</button>
+              <button onClick={() => handleDelete(deleting)} className="flex-1 py-2.5 rounded-lg text-xs bg-red-600 hover:bg-red-700 text-white font-bold">삭제</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center justify-between">
         <p className="text-xs text-gray-500">운영 절차 실행 이력 및 단계별 진행 관리</p>
         <button onClick={() => setAdding(true)}
@@ -306,21 +473,28 @@ function RunbookTab() {
         <div className="space-y-3">
           {list.map(rb => (
             <div key={rb.id} className="card-bg rounded-xl overflow-hidden">
-              <button className="w-full flex items-center justify-between px-5 py-4 hover:bg-white/5 text-left"
-                onClick={() => setActive(active === rb.id ? null : rb.id)}>
-                <div className="flex items-center gap-3">
-                  <ClipboardList className="w-4 h-4 text-orange-400" />
-                  <div>
-                    <p className="text-sm font-bold text-white">{rb.title}</p>
-                    <p className="text-[10px] text-gray-500 mt-0.5">
-                      {TYPE_LABELS[rb.type] ?? rb.type} · {rb.target} · {fmt(rb.createdAt)}
-                    </p>
+              <div className="flex items-center w-full">
+                <button className="flex-1 flex items-center justify-between px-5 py-4 hover:bg-white/5 text-left"
+                  onClick={() => setActive(active === rb.id ? null : rb.id)}>
+                  <div className="flex items-center gap-3">
+                    <ClipboardList className="w-4 h-4 text-orange-400" />
+                    <div>
+                      <p className="text-sm font-bold text-white">{rb.title}</p>
+                      <p className="text-[10px] text-gray-500 mt-0.5">
+                        {TYPE_LABELS[rb.type] ?? rb.type} · {rb.target} · {fmt(rb.createdAt)}
+                      </p>
+                    </div>
                   </div>
-                </div>
-                <span className={`text-xs font-bold ${STATUS_COLORS[rb.status] ?? 'text-gray-400'}`}>
-                  {rb.status}
-                </span>
-              </button>
+                  <span className={`text-xs font-bold ${STATUS_COLORS[rb.status] ?? 'text-gray-400'}`}>
+                    {rb.status}
+                  </span>
+                </button>
+                <button
+                  onClick={() => setDeleting(rb)}
+                  className="px-4 py-4 text-gray-600 hover:text-red-400 hover:bg-red-500/10 transition-colors">
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
 
               {active === rb.id && rb.steps && (
                 <div className="border-t border-gray-800 px-5 py-4 space-y-2">
@@ -358,6 +532,7 @@ export default function HaSequence() {
   const [saving,      setSaving]      = useState(false)
   const [saved,       setSaved]       = useState(false)
   const [modal,       setModal]       = useState(null)  // null | { idx } | 'new'
+  const [execModal,   setExecModal]   = useState(false)
 
   const steps = sequences[activeTab] ?? []
 
@@ -411,15 +586,21 @@ export default function HaSequence() {
     setModal(null)
   }
 
-  // 저장 (서버)
+  // 저장 (서버) — 성공 여부 반환(실행 전 자동 저장에서 사용)
   async function save() {
-    if (!clusterId) return
+    if (!clusterId) return false
     setSaving(true)
     try {
       await updateHaSequences(clusterId, { type: activeTab, steps })
       setSaved(true)
       setTimeout(() => setSaved(false), 2000)
-    } catch { /* ignore */ } finally { setSaving(false) }
+      return true
+    } catch { return false } finally { setSaving(false) }
+  }
+
+  // 실행: 현재 편집한 절차를 먼저 저장한 뒤 실행 모달을 연다(저장-전-실행 함정 방지)
+  async function openExec() {
+    if (await save()) setExecModal(true)
   }
 
   // VIP_TRANSFER 인덱스 찾기 (Failover 절차 시각화용)
@@ -430,13 +611,20 @@ export default function HaSequence() {
 
   return (
     <div className="p-8 pt-0 space-y-5">
-      <ComingSoon feature="HA 페일오버 시퀀스" />
       {/* 모달 */}
       {modal && (
         <StepModal
           initial={modal === 'new' ? null : steps[modal.idx]}
           onClose={() => setModal(null)}
           onSave={saveStep}
+        />
+      )}
+      {execModal && activeTab !== 'RUNBOOK' && (
+        <ExecuteModal
+          clusterId={clusterId}
+          type={activeTab}
+          steps={steps}
+          onClose={() => setExecModal(false)}
         />
       )}
 
@@ -452,7 +640,7 @@ export default function HaSequence() {
           {/* 클러스터 선택 */}
           <select
             value={clusterId ?? ''}
-            onChange={e => setClusterId(+e.target.value)}
+            onChange={e => setClusterId(e.target.value)}
             className="px-3 py-2 rounded-lg text-xs bg-gray-900 border border-gray-700 text-white outline-none focus:border-blue-500">
             {clusters.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
@@ -574,17 +762,30 @@ export default function HaSequence() {
         </div>
       )}
 
-      {/* 저장 버튼 (Runbook 탭 제외) */}
+      {/* 저장 + 실행 버튼 (Runbook 탭 제외) */}
       {activeTab !== 'RUNBOOK' && (
         <div className="flex justify-between items-center">
           <p className="text-xs text-gray-600">
             변경사항은 저장 버튼을 눌러야 반영됩니다.
           </p>
-          <button onClick={save} disabled={saving}
-            className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 disabled:opacity-50 transition-all">
-            <Save className="w-4 h-4" />
-            {saving ? '저장 중...' : saved ? '✓ 저장됨' : '절차 저장'}
-          </button>
+          <div className="flex items-center gap-3">
+            <button onClick={save} disabled={saving}
+              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gray-700 hover:bg-gray-600 text-white text-sm font-bold disabled:opacity-50 transition-all">
+              <Save className="w-4 h-4" />
+              {saving ? '저장 중...' : saved ? '✓ 저장됨' : '절차 저장'}
+            </button>
+            {steps.length > 0 && (() => {
+              const em = EXEC_META[activeTab]
+              const EIcon = em.icon
+              return (
+                <button onClick={openExec} disabled={saving}
+                  className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-white text-sm font-bold transition-all disabled:opacity-50 ${em.color}`}>
+                  <EIcon className="w-4 h-4" />
+                  {em.label}
+                </button>
+              )
+            })()}
+          </div>
         </div>
       )}
 
