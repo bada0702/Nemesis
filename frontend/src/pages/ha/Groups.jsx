@@ -71,7 +71,7 @@ function NodeCard({ node }) {
         <Server className={`w-8 h-8 ${toneIcon}`} />
         <div>
           <p className="text-sm font-bold text-white">{node.hostname ?? '—'}</p>
-          <p className="text-[11px] text-gray-500 font-mono">{node.ipAddress ?? ''}</p>
+          <p className="text-[11px] text-gray-500 font-mono">{node.serviceIp ?? node.ipAddress ?? ''}</p>
         </div>
       </div>
 

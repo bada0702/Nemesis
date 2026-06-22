@@ -156,6 +156,7 @@ public class NodeService {
                 .nodeId(node.getId())
                 .hostname(node.getHostname())
                 .ipAddress(node.getIpAddress())
+                .serviceIp(node.getServiceIp())
                 .osType(node.getOsType().name())
                 .role(node.getRole().uiToken())
                 .state(state)
