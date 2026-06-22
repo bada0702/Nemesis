@@ -1,7 +1,10 @@
 package com.nemesis.domain.dashboard;
 
 import com.nemesis.cache.MetricsCacheService;
+import com.nemesis.domain.agent.AgentCommandClient;
 import com.nemesis.domain.agent.AgentKeyRepository;
+import com.nemesis.domain.alert.AlertRule;
+import com.nemesis.domain.alert.AlertRuleRepository;
 import com.nemesis.domain.cluster.ClusterRepository;
 import com.nemesis.domain.node.Node;
 import com.nemesis.domain.node.NodeRepository;
@@ -22,6 +25,8 @@ public class DashboardService {
     private final NodeRepository nodeRepository;
     private final AgentKeyRepository agentKeyRepository;
     private final MetricsCacheService metricsCache;
+    private final AlertRuleRepository alertRuleRepository;
+    private final AgentCommandClient commandClient;
 
     @Transactional(readOnly = true)
     public DashboardSummaryDto getSummary() {
@@ -101,22 +106,35 @@ public class DashboardService {
         List<AlertDto.AlertItem> items = new ArrayList<>();
         String now = OffsetDateTime.now().toString();
 
+        // 알람 규칙(임계치)을 단일 소스로 사용. 비활성 규칙은 알람을 만들지 않는다.
+        Map<String, AlertRule> rules = new HashMap<>();
+        for (AlertRule r : alertRuleRepository.findAll()) rules.put(r.getMetric(), r);
+
+        boolean nodeStateOn = isEnabled(rules, "node_state");
+        AlertRule cpuRule    = enabledRule(rules, "cpu");
+        AlertRule memRule    = enabledRule(rules, "memory");
+        AlertRule diskRule   = enabledRule(rules, "disk");
+
         nodes.forEach(node -> {
-            if (node.getRole() == Node.Role.fault) {
+            if (nodeStateOn && node.getRole() == Node.Role.fault) {
                 items.add(AlertDto.AlertItem.builder()
-                        .level("CRITICAL")
+                        .level(level(rules, "node_state", "CRITICAL"))
                         .message(node.getHostname() + " 노드 장애 감지")
                         .createdAt(now)
                         .build());
             }
             metricsCache.get(node.getId()).ifPresent(m -> {
-                if (m.getCpuPercent() > 85)
-                    items.add(AlertDto.AlertItem.builder().level("WARNING")
+                if (cpuRule != null && m.getCpuPercent() > cpuRule.getThreshold())
+                    items.add(AlertDto.AlertItem.builder().level(cpuRule.getLevel())
                             .message(node.getHostname() + " CPU " + Math.round(m.getCpuPercent()) + "% 초과")
                             .createdAt(now).build());
-                if (m.getMemoryPercent() > 85)
-                    items.add(AlertDto.AlertItem.builder().level("WARNING")
+                if (memRule != null && m.getMemoryPercent() > memRule.getThreshold())
+                    items.add(AlertDto.AlertItem.builder().level(memRule.getLevel())
                             .message(node.getHostname() + " Memory " + Math.round(m.getMemoryPercent()) + "% 초과")
+                            .createdAt(now).build());
+                if (diskRule != null && m.getDiskPercent() > diskRule.getThreshold())
+                    items.add(AlertDto.AlertItem.builder().level(diskRule.getLevel())
+                            .message(node.getHostname() + " Disk " + Math.round(m.getDiskPercent()) + "% 초과")
                             .createdAt(now).build());
             });
         });
@@ -128,20 +146,63 @@ public class DashboardService {
         return AlertDto.builder().items(items).build();
     }
 
+    private boolean isEnabled(Map<String, AlertRule> rules, String metric) {
+        AlertRule r = rules.get(metric);
+        return r != null && r.isEnabled();
+    }
+
+    private AlertRule enabledRule(Map<String, AlertRule> rules, String metric) {
+        AlertRule r = rules.get(metric);
+        return (r != null && r.isEnabled()) ? r : null;
+    }
+
+    private String level(Map<String, AlertRule> rules, String metric, String fallback) {
+        AlertRule r = rules.get(metric);
+        return r != null ? r.getLevel() : fallback;
+    }
+
+    private static final String DOCKER_STATS_MARKER = "---STATS---";
+
+    /**
+     * 노드별 Docker 컨테이너 상태를 실시간 조회한다. 명령채널(17001)로
+     * control.sh docker-ps 를 실행해 running/total 컨테이너 수를 집계한다.
+     * docker 미설치/통신 실패 노드는 supported=false 로 graceful 처리(전체를 막지 않음).
+     */
     @Transactional(readOnly = true)
     public Map<String, Object> getDockerStatus() {
-        // Docker 컨테이너 수집은 에이전트 미구현(Roadmap Phase 5). 가짜 0/0 대신 명시적 미지원으로 응답.
-        List<Map<String, Object>> nodeList = nodeRepository.findAll().stream().map(n -> {
+        boolean anySupported = false;
+        List<Map<String, Object>> nodeList = new ArrayList<>();
+        for (Node n : nodeRepository.findAll()) {
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("hostname", n.getHostname());
-            m.put("supported", false);
-            m.put("status", "미지원");
-            m.put("runningContainers", null);
-            m.put("totalContainers", null);
-            return m;
-        }).collect(Collectors.toList());
-        return Map.of("supported", false,
-                "note", "Docker 컨테이너 모니터링은 Phase 5에서 제공됩니다.",
+            m.put("ip", n.getServiceIp());
+            AgentCommandClient.Result r = commandClient.execute(n, "control.sh docker-ps");
+            if (r.ok() && r.stdout() != null) {
+                int total = 0, running = 0;
+                for (String line : r.stdout().split("\n")) {
+                    if (line.isBlank()) continue;
+                    if (line.trim().equals(DOCKER_STATS_MARKER)) break; // 통계 섹션은 집계 제외
+                    String[] f = line.split("\t", -1);
+                    if (f.length < 5) continue;
+                    total++;
+                    String st = f[2] == null ? "" : f[2].trim().toLowerCase();
+                    if (st.contains("running") || st.startsWith("up")) running++;
+                }
+                m.put("supported", true);
+                m.put("status", running > 0 ? "정상" : "정지");
+                m.put("runningContainers", running);
+                m.put("totalContainers", total);
+                anySupported = true;
+            } else {
+                m.put("supported", false);
+                m.put("status", "미지원");
+                m.put("runningContainers", null);
+                m.put("totalContainers", null);
+            }
+            nodeList.add(m);
+        }
+        return Map.of("supported", anySupported,
+                "note", anySupported ? "" : "docker 미설치 또는 에이전트 통신 실패",
                 "nodes", nodeList);
     }
 
