@@ -110,4 +110,45 @@ public class SyncService {
     public List<SyncHistory> history(UUID clusterId) {
         return historyRepo.findTop50ByJob_ClusterIdOrderByCreatedAtDesc(clusterId);
     }
+
+    public java.util.List<SyncJob> listJobs(UUID clusterId) { return jobRepo.findByClusterId(clusterId); }
+
+    @Transactional
+    public SyncJob createJob(UUID clusterId, SyncJob in) {
+        in.setId(null);
+        in.setClusterId(clusterId);
+        if (in.getDestPath() == null || in.getDestPath().isBlank()) in.setDestPath(in.getSourcePath());
+        return jobRepo.save(in);
+    }
+
+    @Transactional
+    public SyncJob updateJob(UUID jobId, SyncJob in) {
+        SyncJob j = jobRepo.findById(jobId).orElseThrow(() -> new IllegalArgumentException("작업 없음"));
+        j.setName(in.getName());
+        j.setSourcePath(in.getSourcePath());
+        j.setDestPath((in.getDestPath() == null || in.getDestPath().isBlank()) ? in.getSourcePath() : in.getDestPath());
+        j.setMirrorDelete(in.isMirrorDelete());
+        j.setExcludes(in.getExcludes());
+        j.setScheduleSec(in.getScheduleSec());
+        j.setEnabled(in.isEnabled());
+        return jobRepo.save(j);
+    }
+
+    @Transactional
+    public void deleteJob(UUID jobId) { jobRepo.deleteById(jobId); }
+
+    /** 지정 노드의 경로 하위 디렉토리 목록(읽기전용). */
+    public java.util.List<String> listDirs(UUID nodeId, String path) {
+        Node node = nodeRepo.findById(nodeId).orElseThrow(() -> new IllegalArgumentException("노드 없음"));
+        String p = (path == null || path.isBlank()) ? "/" : path;
+        AgentCommandClient.Result r = commandClient.execute(node, "control.sh dir-list " + p);
+        java.util.List<String> dirs = new java.util.ArrayList<>();
+        if (r.ok() && r.stdout() != null) {
+            for (String line : r.stdout().split("\n")) {
+                String name = line.split("\t")[0].trim();
+                if (!name.isEmpty()) dirs.add(name);
+            }
+        }
+        return dirs;
+    }
 }
