@@ -1,5 +1,6 @@
 package com.nemesis.domain.sync;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
 import java.time.OffsetDateTime;
@@ -16,6 +17,7 @@ public class SyncHistory {
 
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY) private Long id;
 
+    @JsonIgnore // lazy 프록시 → 직렬화/세션밖 접근 방지(이력 응답에 job 객체는 불필요)
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "sync_job_id", nullable = false)
     private SyncJob job;
