@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { Settings, Save, RefreshCw } from 'lucide-react'
 import { getSystemSettings, updateSystemSettings } from '../../api/client'
-import ComingSoon from '../../components/ComingSoon'
 
 function Field({ label, children, hint }) {
   return (
@@ -42,7 +41,6 @@ export default function SystemSettings() {
 
   return (
     <div className="p-8 pt-0 space-y-6">
-      <ComingSoon feature="시스템 설정 저장" />
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-bold text-white">시스템 설정</h2>
@@ -97,6 +95,50 @@ export default function SystemSettings() {
               <span className="text-xs text-gray-400">{settings.aiEnabled ? '활성화됨' : '비활성화됨'}</span>
             </label>
           </Field>
+        </div>
+
+        {/* AI (LLM) */}
+        <div className="card-bg rounded-xl p-5">
+          <h3 className="text-sm font-bold text-white mb-4">AI (LLM) 설정</h3>
+          <Field label="제공자" hint="장애 판단·챗에 사용할 LLM 제공자">
+            <select value={settings.llmProvider ?? 'ollama'} onChange={e => set('llmProvider', e.target.value)} className={inputCls}>
+              <option value="ollama">Ollama (로컬)</option>
+              <option value="anthropic">Anthropic (Claude)</option>
+              <option value="openai">OpenAI</option>
+            </select>
+          </Field>
+          {(settings.llmProvider ?? 'ollama') === 'ollama' && (
+            <div className="grid grid-cols-2 gap-4 mt-1">
+              <Field label="Ollama Base URL">
+                <input value={settings.llmOllamaBaseUrl ?? ''} onChange={e => set('llmOllamaBaseUrl', e.target.value)} className={inputCls} placeholder="http://localhost:11434" />
+              </Field>
+              <Field label="Ollama 모델">
+                <input value={settings.llmOllamaModel ?? ''} onChange={e => set('llmOllamaModel', e.target.value)} className={inputCls} placeholder="gemma2:9b" />
+              </Field>
+            </div>
+          )}
+          {settings.llmProvider === 'anthropic' && (
+            <div className="grid grid-cols-2 gap-4 mt-1">
+              <Field label="Claude 모델">
+                <input value={settings.llmAnthropicModel ?? ''} onChange={e => set('llmAnthropicModel', e.target.value)} className={inputCls} placeholder="claude-haiku-4-5" />
+              </Field>
+              <Field label="Anthropic API 키" hint={settings.llmAnthropicApiKeySet ? '설정됨 — 변경하려면 새 키 입력' : '미설정'}>
+                <input type="password" value={settings.llmAnthropicApiKey ?? ''} onChange={e => set('llmAnthropicApiKey', e.target.value)} className={inputCls}
+                  placeholder={settings.llmAnthropicApiKeySet ? '••••••••(설정됨, 유지하려면 비워두세요)' : 'sk-ant-...'} />
+              </Field>
+            </div>
+          )}
+          {settings.llmProvider === 'openai' && (
+            <div className="grid grid-cols-2 gap-4 mt-1">
+              <Field label="OpenAI 모델">
+                <input value={settings.llmOpenaiModel ?? ''} onChange={e => set('llmOpenaiModel', e.target.value)} className={inputCls} placeholder="gpt-4o-mini" />
+              </Field>
+              <Field label="OpenAI API 키" hint={settings.llmOpenaiApiKeySet ? '설정됨 — 변경하려면 새 키 입력' : '미설정'}>
+                <input type="password" value={settings.llmOpenaiApiKey ?? ''} onChange={e => set('llmOpenaiApiKey', e.target.value)} className={inputCls}
+                  placeholder={settings.llmOpenaiApiKeySet ? '••••••••(설정됨, 유지하려면 비워두세요)' : 'sk-...'} />
+              </Field>
+            </div>
+          )}
         </div>
 
         {/* 알림 */}
