@@ -100,4 +100,19 @@ class AiFindingServiceTest {
         svc.reconcileResolved(Set.of());   // 활성 지문 없음 → 해소
         verify(repo).save(argThat(f -> f.getStatus().equals(AiFinding.RESOLVED) && f.getResolvedAt() != null));
     }
+
+    @Test void predictiveWarnSetsCategoryPredictive() {
+        when(repo.findByFingerprintAndStatus(anyString(), eq(AiFinding.OPEN))).thenReturn(Optional.empty());
+        Suspect s = new Suspect(nodeId, clusterId, "db2", "active",
+                AiFinding.DISK_TREND, AiFinding.WARN, Map.of("etaMinutes", 200L));
+        svc.recordWarn(s, AiFinding.PREDICTIVE);
+        verify(repo).save(argThat(f -> AiFinding.PREDICTIVE.equals(f.getCategory())
+                && f.getSignalType().equals(AiFinding.DISK_TREND)));
+    }
+
+    @Test void defaultRecordWarnIsReactive() {
+        when(repo.findByFingerprintAndStatus(anyString(), eq(AiFinding.OPEN))).thenReturn(Optional.empty());
+        svc.recordWarn(warn());
+        verify(repo).save(argThat(f -> AiFinding.REACTIVE.equals(f.getCategory())));
+    }
 }

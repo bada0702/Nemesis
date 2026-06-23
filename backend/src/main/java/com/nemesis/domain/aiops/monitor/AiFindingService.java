@@ -27,7 +27,10 @@ public class AiFindingService {
     }
 
     @Transactional
-    public void recordWarn(Suspect s) {
+    public void recordWarn(Suspect s) { recordWarn(s, AiFinding.REACTIVE); }
+
+    @Transactional
+    public void recordWarn(Suspect s, String category) {
         String fp = AiFinding.fingerprint(s.nodeId(), s.signalType());
         Optional<AiFinding> open = repo.findByFingerprintAndStatus(fp, AiFinding.OPEN);
         if (open.isPresent()) {                 // 기존 열림 → lastSeen만 갱신(LLM 재호출 안 함: 비용 한정)
@@ -37,7 +40,7 @@ public class AiFindingService {
             repo.save(f);
             return;
         }
-        AiFinding f = newFinding(s);
+        AiFinding f = newFinding(s, category);
         f.setSummary(summary(s));
         explainErrorPattern(s, f);              // 신규일 때만 SSH 없는 경량 LLM 설명
         repo.save(f);
@@ -64,7 +67,10 @@ public class AiFindingService {
     }
 
     @Transactional
-    public void recordHigh(Suspect s, ScanFinding sf) {
+    public void recordHigh(Suspect s, ScanFinding sf) { recordHigh(s, sf, AiFinding.REACTIVE); }
+
+    @Transactional
+    public void recordHigh(Suspect s, ScanFinding sf, String category) {
         String fp = AiFinding.fingerprint(s.nodeId(), s.signalType());
         Optional<AiFinding> open = repo.findByFingerprintAndStatus(fp, AiFinding.OPEN);
         if (open.isPresent()) {                 // 이미 열림 → 갱신만(제안 중복 방지)
@@ -74,7 +80,7 @@ public class AiFindingService {
             repo.save(f);
             return;
         }
-        AiFinding f = newFinding(s);
+        AiFinding f = newFinding(s, category);
         f.setSeverity(sf != null ? sf.severity() : s.severity());
         f.setSummary(sf != null ? sf.summary() : summary(s));
         if (sf != null) { f.setDiagnosis(sf.diagnosis()); f.setRootCause(sf.rootCause()); }
@@ -96,12 +102,13 @@ public class AiFindingService {
         }
     }
 
-    private AiFinding newFinding(Suspect s) {
+    private AiFinding newFinding(Suspect s, String category) {
         return AiFinding.builder()
                 .id(UUID.randomUUID()).clusterId(s.clusterId()).nodeId(s.nodeId())
                 .signalType(s.signalType()).severity(s.severity()).status(AiFinding.OPEN)
                 .fingerprint(AiFinding.fingerprint(s.nodeId(), s.signalType()))
                 .detail(toJson(s.detail()))
+                .category(category)
                 .firstSeenAt(OffsetDateTime.now()).lastSeenAt(OffsetDateTime.now())
                 .createdAt(OffsetDateTime.now())
                 .build();
