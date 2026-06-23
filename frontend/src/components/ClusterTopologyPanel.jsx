@@ -39,18 +39,19 @@ function linkVisual(status) {
 
 /* ---------- 연결선 ---------- */
 function ConnLine({ x1, y1, x2, y2, linkKind = 'hb', status = null,
-                   fallbackAnimated = false, latency = null, label = null }) {
+                   latency = null, label = null }) {
   const mx = (x1 + x2) / 2
   const my = (y1 + y2) / 2
   const vis = status ? linkVisual(status) : null
 
   // real(mgmt→node)=가는 선, hb(node↔node)=굵은 선
   const isReal  = linkKind === 'real'
-  const color   = vis ? vis.color : '#38bdf8'
+  // 매트릭스 미수신(status=null) 폴백 = 회색 정적선
+  const color   = vis ? vis.color : '#64748b'
   const width   = isReal ? 1.5 : 3
   const opacity = isReal ? 0.6 : 0.85
-  const animated = vis ? vis.animated : fallbackAnimated
-  const dash     = vis ? vis.dash : (fallbackAnimated ? '7 4' : 'none')
+  const animated = vis ? vis.animated : false
+  const dash     = vis ? vis.dash : 'none'
   const latColor = latency === null ? '#64748b' : latency > 500 ? '#fbbf24' : '#34d399'
 
   return (
@@ -371,11 +372,6 @@ export default function ClusterTopologyPanel({ clusterId }) {
 
   const vipNodeId = vipStatus?.nodes?.find(n => n.vipPresent === true)?.nodeId ?? null
 
-  function getLatency(fromId, toId) {
-    if (!diag.network?.results) return null
-    const r = diag.network.results.find(x => x.from === fromId && x.to === toId)
-    return r ? (r.status === 'unreachable' ? null : r.latencyMs) : null
-  }
   // 관리서버→노드 real IP 링크 상태.
   function getServiceLink(nodeId) {
     const n = hbMatrix?.nodes?.find(x => x.nodeId === nodeId)
@@ -460,7 +456,6 @@ export default function ClusterTopologyPanel({ clusterId }) {
                   x2={x + BOX_W / 2}        y2={NODE_Y}
                   linkKind="real"
                   status={sl ? sl.status : null}
-                  fallbackAnimated={node.state === 'RUNNING'}
                   label="real IP"
                   latency={sl ? sl.latencyMs : null}
                 />
@@ -471,14 +466,12 @@ export default function ClusterTopologyPanel({ clusterId }) {
             {nodePositions.slice(1).map(({ node, x }, i) => {
               const fromNode = nodePositions[i].node
               const link = getHbLink(fromNode.nodeId, node.nodeId)
-              const bothUp = node.state === 'RUNNING' && fromNode.state === 'RUNNING'
               return (
                 <ConnLine key={`hb-${node.nodeId}`}
                   x1={nodePositions[i].x + BOX_W} y1={NODE_Y + BOX_H / 2}
                   x2={x}                          y2={NODE_Y + BOX_H / 2}
                   linkKind="hb"
                   status={link ? link.status : null}
-                  fallbackAnimated={bothUp}
                   label="hb IP"
                   latency={link ? link.latencyMs : null}
                 />
@@ -526,16 +519,28 @@ export default function ClusterTopologyPanel({ clusterId }) {
           </svg>
         </div>
 
-        {/* 범례 */}
-        <div className="border-t border-slate-800/60 px-4 py-2.5 flex items-center gap-5 text-[11px] text-slate-500 font-mono flex-wrap">
+        {/* 범례 — 색=상태, 선 종류=링크 */}
+        <div className="border-t border-slate-800/60 px-4 py-2.5 flex items-center gap-4 text-[11px] text-slate-500 font-mono flex-wrap">
+          {/* 상태(색) */}
           {[
-            { color: '#38bdf8', label: 'Control',        w: 1.5 },
-            { color: '#34d399', label: 'Heartbeat OK',   w: 3   },
-            { color: '#ef4444', label: 'Heartbeat Down', w: 3   },
+            { color: '#34d399', label: '정상' },
+            { color: '#fbbf24', label: '느림' },
+            { color: '#ef4444', label: '끊김' },
+          ].map(l => (
+            <div key={l.label} className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full" style={{ background: l.color }} />
+              {l.label}
+            </div>
+          ))}
+          <span className="text-slate-700">·</span>
+          {/* 링크(선 굵기) */}
+          {[
+            { label: 'real IP (관리↔노드)', w: 1.5 },
+            { label: 'hb IP (노드↔노드)',   w: 3   },
           ].map(l => (
             <div key={l.label} className="flex items-center gap-2">
               <svg width="26" height="8">
-                <line x1="0" y1="4" x2="26" y2="4" stroke={l.color}
+                <line x1="0" y1="4" x2="26" y2="4" stroke="#94a3b8"
                   strokeWidth={l.w} strokeDasharray="5 3" />
               </svg>
               {l.label}
