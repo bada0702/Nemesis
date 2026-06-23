@@ -19,24 +19,30 @@ public class AiMonitorService {
     private final AiFindingService findings;
     private final AiOperatorProperties props;
     private final NodeRepository nodeRepo;
+    private final AiPredictPrefilter predictPrefilter;
 
     public AiMonitorService(AiPrefilter prefilter, AiOperatorClient client, AiFindingService findings,
-                            AiOperatorProperties props, NodeRepository nodeRepo) {
+                            AiOperatorProperties props, NodeRepository nodeRepo,
+                            AiPredictPrefilter predictPrefilter) {
         this.prefilter = prefilter; this.client = client; this.findings = findings;
-        this.props = props; this.nodeRepo = nodeRepo;
+        this.props = props; this.nodeRepo = nodeRepo; this.predictPrefilter = predictPrefilter;
     }
 
     public void runScan() {
-        List<Suspect> suspects = prefilter.evaluate();
         Set<String> active = new HashSet<>();
+        scanPass(prefilter.evaluate(), active, AiFinding.REACTIVE);
+        scanPass(predictPrefilter.evaluate(), active, AiFinding.PREDICTIVE);
+        findings.reconcileResolved(active);
+    }
+
+    private void scanPass(List<Suspect> suspects, Set<String> active, String category) {
         for (Suspect s : suspects) {
             active.add(AiFinding.fingerprint(s.nodeId(), s.signalType()));
             boolean high = AiFinding.HIGH.equals(s.severity()) || AiFinding.CRITICAL.equals(s.severity());
-            if (!high) { findings.recordWarn(s); continue; }
+            if (!high) { findings.recordWarn(s, category); continue; }
             ScanFinding sf = investigate(s);
-            findings.recordHigh(s, sf);
+            findings.recordHigh(s, sf, category);
         }
-        findings.reconcileResolved(active);
     }
 
     private ScanFinding investigate(Suspect s) {
