@@ -179,17 +179,35 @@ gpfs_state() {
 # ----------------------------------------------------------------------------
 # 서비스 제어 (systemd → SysV → service 폴백)
 # ----------------------------------------------------------------------------
+# 감지된 프로세스명을 실제 systemd 유닛명으로 해석한다.
+#  1) 이름 그대로가 알려진 유닛이면 그대로 사용
+#  2) 실행 중 프로세스의 systemd cgroup에서 유닛 추출(예: sshd → ssh.service)
+# 둘 다 실패하면 원래 이름을 그대로 돌려줘 systemctl이 명확한 에러를 내게 한다.
+resolve_unit() {
+  n=$1
+  if systemctl cat "$n" >/dev/null 2>&1; then echo "${n%.service}"; return 0; fi
+  pid=$(pgrep -x "$n" 2>/dev/null | head -1)
+  [ -n "$pid" ] || pid=$(pgrep -f "$n" 2>/dev/null | head -1)
+  if [ -n "$pid" ] && [ -r "/proc/$pid/cgroup" ]; then
+    u=$(grep -oE '[A-Za-z0-9@._-]+\.service' "/proc/$pid/cgroup" 2>/dev/null | tail -1)
+    [ -n "$u" ] && { echo "${u%.service}"; return 0; }
+  fi
+  echo "$n"; return 1
+}
+
 svc_action() {
   action=$1; name=$2
   [ -n "$name" ] || usage
   if has systemctl; then
-    systemctl "$action" "$name"
+    unit=$(resolve_unit "$name")
+    [ "$unit" = "$name" ] || log "유닛 해석: $name → $unit"
+    systemctl "$action" "$unit"
   elif [ -x "/etc/init.d/$name" ]; then
     "/etc/init.d/$name" "$action"
   elif has service; then
     service "$name" "$action"
   else
-    die "서비스 관리자 없음 (systemctl/init.d/service)"
+    die "이 노드에서는 서비스 제어를 지원하지 않습니다 (systemctl/init.d/service 없음 — 컨테이너 등)"
   fi
 }
 
