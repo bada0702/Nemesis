@@ -24,6 +24,7 @@ public class ClusterStatusResponse {
         private String          hostname;
         private String          ipAddress;
         private String          serviceIp;
+        private String          heartbeatIp;
         private String          osType;
         private String          role;
         private String          state;

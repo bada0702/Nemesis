@@ -131,8 +131,15 @@ function NodeBox({ x, y, w, h, node, gpfsState, hasVip, selected, onClick }) {
           </span>
           <span className="text-[8px] text-slate-600 font-mono">{node.osType ?? '—'}</span>
         </div>
-        <div className="text-[9px] font-mono text-slate-400 mb-1.5 truncate">
-          {node.ipAddress ?? '—'}
+        <div className="mb-1.5 space-y-0.5">
+          <div className="flex items-center gap-1.5 text-[9px] font-mono truncate">
+            <span className="text-slate-600 w-5 shrink-0">real</span>
+            <span className="text-slate-400">{node.ipAddress ?? '—'}</span>
+          </div>
+          <div className="flex items-center gap-1.5 text-[9px] font-mono truncate">
+            <span className="text-slate-600 w-5 shrink-0">hb</span>
+            <span className="text-slate-400">{node.heartbeatIp ?? '—'}</span>
+          </div>
         </div>
 
         {/* GPFS 상태 */}

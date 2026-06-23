@@ -157,6 +157,7 @@ public class NodeService {
                 .hostname(node.getHostname())
                 .ipAddress(node.getIpAddress())
                 .serviceIp(node.getServiceIp())
+                .heartbeatIp(node.getHeartbeatIp())
                 .osType(node.getOsType().name())
                 .role(node.getRole().uiToken())
                 .state(state)

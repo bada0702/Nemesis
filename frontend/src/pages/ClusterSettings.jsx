@@ -404,6 +404,7 @@ function NodeRow({ node, clusterId, onEdit, onDelete }) {
             </div>
             <div className="flex items-center gap-3 mt-1 flex-wrap">
               <span className="text-[10px] font-mono text-slate-500">IP: {node.ipAddress}</span>
+              {node.heartbeatIp && <span className="text-[10px] font-mono text-slate-500">HB: {node.heartbeatIp}</span>}
               {node.vip && <span className="text-[10px] font-mono text-sky-600">VIP: {node.vip}</span>}
             </div>
           </div>
