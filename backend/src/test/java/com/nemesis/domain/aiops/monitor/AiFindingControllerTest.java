@@ -13,7 +13,21 @@ class AiFindingControllerTest {
                 .signalType(AiFinding.DISK_FULL).build();
         when(repo.findByStatusOrderByLastSeenAtDesc(AiFinding.OPEN)).thenReturn(List.of(f));
         AiFindingController c = new AiFindingController(repo);
-        assertThat(c.list(null)).containsExactly(f);
+        assertThat(c.list(null, null)).containsExactly(f);
         verify(repo).findByStatusOrderByLastSeenAtDesc(AiFinding.OPEN);
+    }
+
+    @Test void listFiltersByCategoryWhenProvided() {
+        AiFindingRepository repo = mock(AiFindingRepository.class);
+        AiFindingController c = new AiFindingController(repo);
+        c.list("OPEN", "PREDICTIVE");
+        verify(repo).findByStatusAndCategoryOrderByLastSeenAtDesc("OPEN", "PREDICTIVE");
+    }
+
+    @Test void listIgnoresBlankCategory() {
+        AiFindingRepository repo = mock(AiFindingRepository.class);
+        AiFindingController c = new AiFindingController(repo);
+        c.list("OPEN", null);
+        verify(repo).findByStatusOrderByLastSeenAtDesc("OPEN");
     }
 }
