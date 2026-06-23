@@ -15,6 +15,8 @@ public class AiFinding {
     public static final String DISK_FULL = "DISK_FULL", MEM_HIGH = "MEM_HIGH",
             CPU_SUSTAINED = "CPU_SUSTAINED", LOG_ERROR_PATTERN = "LOG_ERROR_PATTERN",
             EVENT_SPIKE = "EVENT_SPIKE", OTHER = "OTHER";
+    public static final String DISK_TREND = "DISK_TREND", MEM_TREND = "MEM_TREND";
+    public static final String REACTIVE = "REACTIVE", PREDICTIVE = "PREDICTIVE";
     public static final String INFO = "INFO", WARN = "WARN", HIGH = "HIGH", CRITICAL = "CRITICAL";
 
     public static String fingerprint(UUID nodeId, String signalType) {
@@ -35,6 +37,7 @@ public class AiFinding {
     @Column(name = "root_cause", columnDefinition = "TEXT") private String rootCause;
     @Column(name = "proposal_id") private UUID proposalId;
     @Column(columnDefinition = "TEXT") private String detail;  // JSON
+    @Column(nullable = false, length = 10) private String category;
 
     @Column(name = "first_seen_at") private OffsetDateTime firstSeenAt;
     @Column(name = "last_seen_at") private OffsetDateTime lastSeenAt;
@@ -48,6 +51,7 @@ public class AiFinding {
         if (firstSeenAt == null) firstSeenAt = now;
         if (lastSeenAt == null) lastSeenAt = now;
         if (status == null) status = OPEN;
+        if (category == null) category = REACTIVE;
         if (fingerprint == null && nodeId != null && signalType != null)
             fingerprint = fingerprint(nodeId, signalType);
     }
