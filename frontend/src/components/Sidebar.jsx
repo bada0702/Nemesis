@@ -2,13 +2,15 @@ import React, { useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, GitBranch, Shield, Zap,
-  Activity, Settings,
+  Activity, Settings, Bot,
   ChevronDown, ChevronLeft, ChevronRight, X,
 } from 'lucide-react'
 import { LogoMark, LogoFull } from './Logo'
 
 const MENU = [
   { label: '대시보드', icon: LayoutDashboard, path: '/' },
+
+  { label: 'AI 운영', icon: Bot, path: '/ai' },
 
   { label: '클러스터', icon: GitBranch, path: null, children: [
     { label: '클러스터 목록', path: '/ha/groups'         },
