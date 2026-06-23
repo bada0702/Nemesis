@@ -42,18 +42,17 @@ public class ServiceLinkProber {
 
     /** serviceIp:port 로 TCP connect 시도. 순수 측정(부작용 없음) — 테스트에서 직접 호출. */
     public static ServiceLinkCache.Entry probe(String serviceIp, int controlPort) {
-        long now = System.currentTimeMillis();
         if (serviceIp == null || serviceIp.isBlank()) {
-            return new ServiceLinkCache.Entry("DEAD", null, now);
+            return new ServiceLinkCache.Entry("DEAD", null, System.currentTimeMillis());
         }
         long start = System.nanoTime();
         try (Socket s = new Socket()) {
             s.connect(new InetSocketAddress(serviceIp, controlPort), CONNECT_TIMEOUT_MS);
             int latency = (int) ((System.nanoTime() - start) / 1_000_000);
             String status = latency > SLOW_THRESHOLD_MS ? "SLOW" : "ALIVE";
-            return new ServiceLinkCache.Entry(status, latency, now);
+            return new ServiceLinkCache.Entry(status, latency, System.currentTimeMillis());
         } catch (Exception e) {
-            return new ServiceLinkCache.Entry("DEAD", null, now);
+            return new ServiceLinkCache.Entry("DEAD", null, System.currentTimeMillis());
         }
     }
 }
