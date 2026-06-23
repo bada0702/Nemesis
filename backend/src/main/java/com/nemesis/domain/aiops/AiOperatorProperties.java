@@ -32,5 +32,14 @@ public class AiOperatorProperties {
         private int errorPatternCount = 3;
         private long eventSpikeWindowMs = 600_000L;
         private int eventSpikeCount = 5;
+
+        /** SP5: 추세 기반 장애 예측 */
+        private boolean predictEnabled = true;
+        private int     predictWindowSize = 6;        // 노드별 롤링 샘플 보관 개수
+        private int     predictMinSamples = 4;        // 예측에 필요한 최소 샘플 수
+        private double  predictTargetPercent = 95.0;  // 도달 시 위험으로 보는 목표치(%)
+        private long    predictHorizonMinutes = 360;  // 이 이내 도달 예상 시 신호(분)
+        private long    predictHighEtaMinutes = 120;  // ETA 이하면 HIGH
+        private long    predictCriticalEtaMinutes = 30; // ETA 이하면 CRITICAL
     }
 }
