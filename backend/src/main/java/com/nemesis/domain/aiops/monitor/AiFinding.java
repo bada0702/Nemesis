@@ -11,7 +11,7 @@ import java.util.UUID;
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 public class AiFinding {
 
-    public static final String OPEN = "OPEN", RESOLVED = "RESOLVED";
+    public static final String OPEN = "OPEN", RESOLVED = "RESOLVED", IGNORED = "IGNORED";
     public static final String DISK_FULL = "DISK_FULL", MEM_HIGH = "MEM_HIGH",
             CPU_SUSTAINED = "CPU_SUSTAINED", LOG_ERROR_PATTERN = "LOG_ERROR_PATTERN",
             EVENT_SPIKE = "EVENT_SPIKE", OTHER = "OTHER";

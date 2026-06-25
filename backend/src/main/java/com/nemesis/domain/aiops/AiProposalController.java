@@ -56,7 +56,11 @@ public class AiProposalController {
         m.put("nodeId", p.getNodeId()); m.put("triggerType", p.getTriggerType());
         m.put("triggerReason", p.getTriggerReason()); m.put("diagnosis", p.getDiagnosis());
         m.put("rootCause", p.getRootCause()); m.put("confidence", p.getConfidence());
+        m.put("maxRiskLevel", p.getMaxRiskLevel()); m.put("requiresManual", p.isRequiresManual());
+        m.put("blocked", p.isBlocked()); m.put("blockedReason", p.getBlockedReason());
         m.put("status", p.getStatus()); m.put("decidedBy", p.getDecidedBy());
+        m.put("decidedAt", p.getDecidedAt());
+        m.put("executionLog", p.getExecutionLog());   // 승인·실행 결과(승인 후 화면 표시용)
         m.put("createdAt", p.getCreatedAt());
         try { m.put("proposedActions", mapper.readValue(
                 p.getProposedActions() == null ? "[]" : p.getProposedActions(), List.class)); }

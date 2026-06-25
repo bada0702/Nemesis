@@ -126,6 +126,9 @@ export const getAiNotifications = ()        => client.get('/ai/notifications')
 export const getAiFindings      = (status, category) => client.get('/ai/findings', {
   params: { ...(status ? { status } : {}), ...(category ? { category } : {}) },
 })
+export const reanalyzeAiFinding = (id) => client.post(`/ai/findings/${id}/reanalyze`)
+export const ignoreAiFinding    = (id) => client.post(`/ai/findings/${id}/ignore`)
+export const deleteAiFinding    = (id) => client.delete(`/ai/findings/${id}`)
 
 // AI 장애 분석
 export const triggerAiAnalysis   = (nodeId)        => client.post(`/ai/analyze/${nodeId}`)

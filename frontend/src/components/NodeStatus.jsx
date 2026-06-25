@@ -73,14 +73,17 @@ function MetricBar({ label, value }) {
   )
 }
 
-// 액션별 에이전트 명령 (null=특수 처리)
+// 액션별 에이전트 명령.
+// 에이전트는 화이트리스트 스크립트(control.sh)로 시작하는 명령만 허용한다.
+// raw 셸 명령(uptime/free/tail/mmgetstate 등)은 "허용되지 않은 명령"으로 403 거부되므로,
+// 모든 작업을 control.sh 서브커맨드로 라우팅한다.
 const ACTION_CMD = {
-  health:      () => 'uptime && echo "---" && free -m && echo "---" && df -h /',
-  logs:        () => 'tail -n 50 /var/log/syslog 2>/dev/null || tail -n 50 /var/log/messages 2>/dev/null || journalctl -n 50 --no-pager 2>/dev/null',
-  replication: () => 'mmgetstate -Y 2>/dev/null || echo "GPFS not installed. Checking mounts:" && df -t nfs 2>/dev/null || echo "No NFS mounts"',
-  restart:     (svc) => `control.sh svc-stop ${svc} && sleep 2 && control.sh svc-start ${svc}`,
-  join:        () => 'mmstartup 2>/dev/null || echo "GPFS mmstartup not available"',
-  maintenance: () => 'echo "Maintenance mode activated on $(hostname) at $(date)"',
+  health:      () => 'control.sh health',
+  logs:        () => 'control.sh logs',
+  replication: () => 'control.sh replication',
+  restart:     (svc) => `control.sh svc-restart ${svc}`,   // 단일 명령(과거 && 복합명령은 shell 미사용 실행이라 깨졌음)
+  join:        () => 'control.sh cluster-join',
+  maintenance: () => 'control.sh maintenance',
 }
 
 // ── 런북 패널 ─────────────────────────────────────────────────

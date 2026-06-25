@@ -36,7 +36,9 @@ public class LlmService {
     private static final String ANALYZE_SYSTEM =
             "당신은 AIX/Linux 엔터프라이즈 장애 분석 전문가입니다. 에러 로그를 분석해 근본 원인과 수정 명령을 " +
             "아래 JSON으로만 반환하세요(설명 금지): " +
-            "{\"rootCause\":\"...\",\"fixCommands\":[{\"order\":1,\"command\":\"...\",\"description\":\"...\",\"risk\":\"LOW\"}]}";
+            "{\"rootCause\":\"...\",\"fixCommands\":[{\"order\":1,\"command\":\"...\",\"description\":\"...\",\"risk\":\"LOW\"}]}. " +
+            "rootCause(근본 원인)와 각 fixCommands의 description(조치 방법 설명)은 반드시 한국어로 작성하세요. " +
+            "command(실행 명령)는 원본 그대로 둡니다.";
 
     /** 자유 대화. 채팅 전용 긴 타임아웃을 사용한다. 실패 시 예외를 그대로 던진다(컨트롤러에서 처리). */
     public String chat(String systemPrompt, String userMessage) throws Exception {
@@ -85,6 +87,28 @@ public class LlmService {
                     System.currentTimeMillis() - t0, false);
         } catch (Exception e) {
             log.warn("LLM 판단 실패(provider={}): {}", props.getProvider(), e.getMessage());
+            return null;
+        }
+    }
+
+    private static final String CLUSTER_HEALTH_SYSTEM =
+            "당신은 HA(고가용성) 클러스터 운영 분석가입니다. 주어진 클러스터/노드 상태를 보고 " +
+            "한국어 진단 보고서를 작성하세요. 마크다운 기호 없이 평문으로, 아래 4개 항목을 " +
+            "각각 제목 줄 + 내용으로 구분해 작성하세요:\n" +
+            "[종합 상태] 클러스터가 정상/주의/위험 중 무엇이고 그 이유\n" +
+            "[노드별 관찰] 각 노드의 역할·상태·자원(CPU/MEM/DISK)에서 주목할 점\n" +
+            "[근본 원인 / 위험 요인] 관찰된 문제의 원인 또는 잠재 위험(없으면 '특이사항 없음')\n" +
+            "[권장 조치] 운영자가 따를 단계별 조치를 1. 2. 3. 번호로 나열\n" +
+            "데이터로 단정할 수 없는 부분은 '추정'이라고 밝히세요. 간결하되 구체적으로.";
+
+    /** 클러스터 전체 상태 진단(자유 텍스트 보고서). 미설정/실패 시 null(호출자가 규칙기반 폴백). */
+    public String analyzeClusterHealth(String context) {
+        LlmProvider p = providers.get(props.getProvider());
+        if (p == null || !p.isConfigured()) return null;
+        try {
+            return p.completeChat(CLUSTER_HEALTH_SYSTEM, context);
+        } catch (Exception e) {
+            log.warn("LLM 클러스터 진단 실패(provider={}): {}", props.getProvider(), e.getMessage());
             return null;
         }
     }

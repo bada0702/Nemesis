@@ -93,16 +93,46 @@ def push_metrics(server_url: str, api_key: str, metrics: dict):
 
 
 def detect_own_ip(server_url: str) -> str:
-    """관리 서버 방향 라우팅에 쓰이는 자기 IP를 감지(UDP connect 트릭, 패킷 미전송)."""
+    """관리 서버 방향 라우팅에 쓰이는 자기 IP를 감지(UDP connect 트릭, 패킷 미전송).
+
+    서버를 localhost로 접속하는 환경에서는 getsockname()이 127.0.0.1을 반환하는데,
+    이 값을 serviceIp로 보고하면 관리 서버가 노드의 control 포트(17001)에 도달할 수 없다
+    (자기 자신 loopback으로 접속). loopback이 감지되면 라우팅 가능한 인터페이스 IP로 폴백한다.
+    """
+    def probe(dst: str):
+        """dst로 향하는 라우팅의 source IP를 구한다(UDP connect, 실제 패킷 미전송)."""
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.connect((dst, 9))
+            ip = s.getsockname()[0]
+            s.close()
+            return ip
+        except Exception:
+            return None
+
+    # 1) 관리 서버 방향 source IP. 서버가 localhost면 loopback이 나오므로 그 경우는 배제.
+    host = server_url.split('://', 1)[-1].split('/', 1)[0].split(':', 1)[0]
+    candidate = probe(host)
+    if candidate and not candidate.startswith('127.'):
+        return candidate
+
+    # 2) 공인 IP 방향 라우팅으로 기본 인터페이스의 라우팅 가능한 IP를 찾는다
+    #    (서버를 localhost로 접속하는 환경에서도 동작).
+    routable = probe('8.8.8.8')
+    if routable and not routable.startswith('127.'):
+        return routable
+
+    # 3) 호스트명 해석 중 비-loopback 주소
     try:
-        host = server_url.split('://', 1)[-1].split('/', 1)[0].split(':', 1)[0]
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.connect((host, 9))
-        ip = s.getsockname()[0]
-        s.close()
-        return ip
+        for info in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET):
+            ip = info[4][0]
+            if not ip.startswith('127.'):
+                return ip
     except Exception:
-        return socket.gethostbyname(socket.gethostname())
+        pass
+
+    log.warning("라우팅 가능한 IP를 찾지 못해 loopback을 사용한다. NEMESIS_SERVICE_IP 설정을 권장한다.")
+    return candidate or '127.0.0.1'
 
 
 def register(server_url: str, api_key: str, version: str) -> dict:
@@ -206,6 +236,48 @@ def ping_peer(ip: str) -> bool:
         return False
 
 
+def measure_peer(ip: str) -> tuple[str, int | None]:
+    """피어 하트비트 상태와 왕복 지연(ms)을 측정한다. (status, latencyMs)."""
+    if not ip:
+        return 'DEAD', None
+    start = time.monotonic()
+    try:
+        req = urllib.request.Request(f"http://{ip}:{HEARTBEAT_PORT}/hb", method='GET')
+        with urllib.request.urlopen(req, timeout=2) as resp:
+            ok = resp.status == 200
+    except Exception:
+        return 'DEAD', None
+    latency = int((time.monotonic() - start) * 1000)
+    if not ok:
+        return 'DEAD', latency
+    return ('SLOW' if latency > 500 else 'ALIVE'), latency
+
+
+def report_heartbeat(server_url: str, api_key: str):
+    """STATE의 피어 목록을 모두 측정해 관리 서버에 보고(하트비트 매트릭스용)."""
+    meta, _, _ = STATE.snapshot()
+    peers = meta.get('peers') or []
+    if not peers:
+        return
+    results = []
+    for p in peers:
+        node_id = p.get('nodeId')
+        if not node_id:
+            continue
+        status, latency = measure_peer(p.get('heartbeatIp'))
+        results.append({'toNodeId': node_id, 'status': status, 'latencyMs': latency})
+    if not results:
+        return
+    try:
+        _request(
+            f"{server_url}/api/agent/heartbeat",
+            data=json.dumps({'peers': results}).encode(),
+            headers={'Authorization': f'Bearer {api_key}'},
+        )
+    except Exception as e:
+        log.debug(f"하트비트 보고 실패: {e}")
+
+
 def _run_control(args) -> bool:
     try:
         p = subprocess.run(['sh', CONTROL_SCRIPT, *args],
@@ -291,7 +363,11 @@ def resolve_command(command: str):
     first = tokens[0].lstrip('./')
     script = ALLOWED_SCRIPTS.get(first)
     if script is None:
-        raise ValueError(f"허용되지 않은 명령: {first}")
+        # 문제 + 원인 + 해결: 허용된 스크립트 목록을 함께 안내한다.
+        allowed = ', '.join(sorted(ALLOWED_SCRIPTS.keys()))
+        raise ValueError(
+            f"허용되지 않은 명령: '{first}'. 보안상 화이트리스트 스크립트만 실행 가능합니다. "
+            f"허용 목록: {allowed}. (예: 'control.sh health', 'control.sh svc-restart <서비스명>')")
     if not os.path.isfile(script):
         raise ValueError(f"스크립트 없음: {script}")
 
@@ -386,6 +462,9 @@ def run_loop(server_url: str, api_key: str):
             STATE.note_push(False)
             log.error(f"Push 오류: {e}")
 
+        # 노드 간 피어 하트비트 측정 결과 보고(관리 UI 하트비트 매트릭스용)
+        report_heartbeat(server_url, api_key)
+
         # 클러스터 메타(피어/VIP) 동기화 → metadata.json 원자적 갱신(D-4)
         if time.time() - last_pull > PULL_INTERVAL:
             try:
@@ -402,13 +481,17 @@ def run_loop(server_url: str, api_key: str):
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Nemesis Agent v1.0')
-    sub    = parser.add_subparsers(dest='cmd')
+    parser = argparse.ArgumentParser(
+        description='Nemesis Agent v1.0 — AIX/Linux HA 노드 에이전트(메트릭 수집·하트비트·명령 수신).')
+    sub    = parser.add_subparsers(dest='cmd', metavar='start')
 
-    start = sub.add_parser('start')
-    start.add_argument('--server',  required=True)
-    start.add_argument('--key',     required=True)
-    start.add_argument('--version', default='1.0.0')
+    start = sub.add_parser('start', help='에이전트를 시작해 관리 서버에 등록하고 주기적으로 보고합니다.')
+    start.add_argument('--server',  required=True,
+                       metavar='URL', help='관리 서버 주소 (예: https://10.0.0.5:18080)')
+    start.add_argument('--key',     required=True,
+                       metavar='API_KEY', help='노드 등록용 API 키 (UI 설정>에이전트 설치에서 발급)')
+    start.add_argument('--version', default='1.0.0',
+                       metavar='VER', help='에이전트 버전 태그 (기본: 1.0.0)')
 
     args = parser.parse_args()
 

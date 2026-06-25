@@ -7,11 +7,13 @@ import {
 import { OverallStatusCard, CountCard } from '../components/dashboard/StatusCards'
 import SyncStatusPanel       from '../components/dashboard/SyncStatusPanel'
 import AlarmPanel            from '../components/dashboard/AlarmPanel'
+import OpenIssuePanel        from '../components/dashboard/OpenIssuePanel'
 import DbPanel               from '../components/dashboard/DbPanel'
 import SwPanel               from '../components/dashboard/SwPanel'
 import DockerPanel           from '../components/dashboard/DockerPanel'
 import RunbookProgressPanel  from '../components/dashboard/RunbookProgressPanel'
 import AiPanel               from '../components/dashboard/AiPanel'
+import AiProposalPanel       from '../components/dashboard/AiProposalPanel'
 
 const POLL_MS = 5000
 
@@ -206,13 +208,19 @@ export default function Dashboard() {
         />
       </div>
 
-      {/* ── 2분할 행: 이중화 동기화 상태(8/12) · 실시간 알람(4/12) ── */}
+      {/* ── 이중화 동기화 상태(8/12) · 우측에 실시간 알람·실시간 로그 분석(폭 절반) ── */}
+      {/* 우측 두 패널은 동기화 패널 높이에 "고정"한다. xl에서 우측 컬럼 내부를 absolute inset-0 로
+          띄워 콘텐츠가 행 높이에 영향을 주지 않게 하면(=동기화 패널만 높이를 결정), 알람/로그가
+          쌓여도 패널이 길어지지 않고 내부 스크롤로 나머지를 보여준다. grid-rows-1=1fr 로 행이 부모를 채움. */}
       <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-stretch">
         <div className="md:col-span-12 xl:col-span-8">
           <SyncStatusPanel agents={agents} onRefresh={load} />
         </div>
-        <div className="md:col-span-12 xl:col-span-4">
-          <AlarmPanel items={alerts} onClear={clearAlarms} className="h-full" />
+        <div className="md:col-span-12 xl:col-span-4 relative min-h-0">
+          <div className="grid grid-cols-2 grid-rows-1 gap-6 xl:absolute xl:inset-0">
+            <AlarmPanel items={alerts} onClear={clearAlarms} className="h-full min-h-0" />
+            <OpenIssuePanel className="h-full min-h-0" />
+          </div>
         </div>
       </div>
 
@@ -224,6 +232,8 @@ export default function Dashboard() {
             <SwPanel items={swItems.filter(i => i.type !== 'DB')} />
             <DockerPanel nodes={docker} />
           </div>
+          {/* AI 조치 제안 — 진행중인 작업 카드 위에 표시(대기 제안 없으면 렌더 안 함) */}
+          <AiProposalPanel />
           <RunbookProgressPanel items={taskItems} />
         </div>
         <AiPanel className="xl:col-span-4 h-full" />

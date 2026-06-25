@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
-import { ClipboardList, Play, Check, Settings, RefreshCw, Plus, ChevronRight, SkipForward } from 'lucide-react'
-import { getRunbook, createRunbook, updateRunbookStep } from '../api/client'
+import { ClipboardList, Play, Check, Settings, RefreshCw, Plus, ChevronRight, Trash2 } from 'lucide-react'
+import { getRunbook, createRunbook, updateRunbookStep, deleteRunbook } from '../api/client'
 import { statusBadge, fmt } from '../lib/utils'
 
 const TYPE_LABELS  = { MAINTENANCE: '정기점검', BACKUP: 'DB백업', FAILOVER: 'Failover', PATCH: '패치', OTHER: '기타' }
@@ -92,12 +92,50 @@ function AddModal({ onClose, onCreated }) {
   )
 }
 
+function DeleteConfirmModal({ item, onClose, onDeleted }) {
+  const [deleting, setDeleting] = useState(false)
+  async function confirm() {
+    setDeleting(true)
+    try { await deleteRunbook(item.id); onDeleted() }
+    catch { setDeleting(false) }
+  }
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.75)' }}
+      onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="card-bg w-full max-w-sm rounded-2xl p-6 space-y-4">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-full bg-red-500/15 flex items-center justify-center flex-shrink-0">
+            <Trash2 className="w-4 h-4 text-red-400" />
+          </div>
+          <div>
+            <p className="text-sm font-bold text-white">Runbook 삭제</p>
+            <p className="text-xs text-gray-500 mt-0.5">이 작업은 되돌릴 수 없습니다.</p>
+          </div>
+        </div>
+        <div className="bg-gray-900/60 rounded-lg px-4 py-3">
+          <p className="text-xs text-gray-400 font-medium">{item.title}</p>
+          <p className="text-[10px] text-gray-600 mt-0.5">{item.target} · {TYPE_LABELS[item.type] ?? item.type}</p>
+        </div>
+        <div className="flex gap-3 pt-1">
+          <button onClick={onClose} className="flex-1 py-2.5 rounded-lg text-xs border border-gray-700 text-gray-400 hover:text-white">취소</button>
+          <button onClick={confirm} disabled={deleting}
+            className="flex-1 py-2.5 rounded-lg text-xs bg-red-600 hover:bg-red-700 text-white disabled:opacity-50 flex items-center justify-center gap-1.5">
+            {deleting ? <div className="w-3 h-3 border border-white/40 border-t-white rounded-full animate-spin" /> : <Trash2 className="w-3 h-3" />}
+            {deleting ? '삭제 중...' : '삭제 확인'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function Runbook() {
-  const [items,    setItems]    = useState([])
-  const [loading,  setLoading]  = useState(true)
-  const [addOpen,  setAddOpen]  = useState(false)
-  const [expanded, setExpanded] = useState({})
-  const [stepping, setStepping] = useState({})
+  const [items,      setItems]      = useState([])
+  const [loading,    setLoading]    = useState(true)
+  const [addOpen,    setAddOpen]    = useState(false)
+  const [expanded,   setExpanded]   = useState({})
+  const [stepping,   setStepping]   = useState({})
+  const [deleteTarget, setDeleteTarget] = useState(null)
 
   async function load() {
     setLoading(true)
@@ -132,6 +170,13 @@ export default function Runbook() {
   return (
     <div className="p-8 pt-0 space-y-6">
       {addOpen && <AddModal onClose={() => setAddOpen(false)} onCreated={() => { setAddOpen(false); load() }} />}
+      {deleteTarget && (
+        <DeleteConfirmModal
+          item={deleteTarget}
+          onClose={() => setDeleteTarget(null)}
+          onDeleted={() => { setDeleteTarget(null); load() }}
+        />
+      )}
 
       <div className="flex items-center justify-between">
         <div>
@@ -200,6 +245,12 @@ export default function Runbook() {
                       )}
                       {isDone && <span className="text-xs text-green-400 font-medium">완료</span>}
                       <span className={statusBadge(item.status)}>{item.status}</span>
+                      <button
+                        onClick={e => { e.stopPropagation(); setDeleteTarget(item) }}
+                        className="p-1.5 rounded-lg text-gray-600 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                        title="삭제">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
                     </div>
                   </div>
 

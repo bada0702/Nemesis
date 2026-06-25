@@ -19,7 +19,14 @@
       "Bash(docker-compose up *)",
       "Bash(curl -s http://localhost:18080/api/db)",
       "Bash(curl -s --max-time 30 http://localhost:18080/api/docker/containers)",
-      "Bash(curl -s --max-time 30 http://localhost:18080/api/docker/images)"
+      "Bash(curl -s --max-time 30 http://localhost:18080/api/docker/images)",
+      "Read(//root/aibot/**)",
+      "Bash(sh -n agent/control.sh)",
+      "Bash(mkdir -p /tmp/dstest/a /tmp/dstest/b)",
+      "Bash(touch /tmp/dstest/f.txt)",
+      "Bash(sh agent/control.sh dir-list /tmp/dstest)",
+      "Bash(sh agent/control.sh dir-list /no/such/path)",
+      "Bash(NEMESIS_SYNC_USER=$\\(whoami\\) sh agent/control.sh ssh-keygen-nemesis)"
     ]
   }
 }

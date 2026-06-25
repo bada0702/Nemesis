@@ -1,25 +1,33 @@
 // Mock API Server — 백엔드/Docker 없이 Nemesis UI 테스트용
-const http = require('http')
+// 계약은 실 Spring 백엔드와 일치시킨다(cluster/node id = UUID 문자열, 동일 응답 형태).
+const http   = require('http')
+const crypto = require('crypto')
+
+const uuid = () => crypto.randomUUID()
 
 // ── 동적 스토어 ──────────────────────────────────────────────
-let nextClusterId = 4
-let nextNodeId    = 100
+let nextNodeId = 100
+
+// 실 백엔드처럼 cluster id는 UUID. 고정 시드 UUID로 재현성 유지.
+const C1 = '11111111-1111-4111-8111-111111111111'
+const C2 = '22222222-2222-4222-8222-222222222222'
+const C3 = '33333333-3333-4333-8333-333333333333'
 
 const clusterStore = {
-  1: { id: 1, name: 'prod-cluster-01',    vip: '10.0.0.1' },
-  2: { id: 2, name: 'staging-cluster-01', vip: '10.0.0.2' },
-  3: { id: 3, name: 'dr-cluster-01',      vip: '10.0.0.3' },
+  [C1]: { id: C1, name: 'prod-cluster-01',    description: '운영 클러스터', vip: '10.0.0.1', vipCidr: 24, maxFailoverCount: 5, pingpongGuardSeconds: 180, heartbeatFailThreshold: 3, aiEnabled: false },
+  [C2]: { id: C2, name: 'staging-cluster-01', description: '스테이징',     vip: '10.0.0.2', vipCidr: 24, maxFailoverCount: 5, pingpongGuardSeconds: 180, heartbeatFailThreshold: 3, aiEnabled: false },
+  [C3]: { id: C3, name: 'dr-cluster-01',      description: 'DR',           vip: '10.0.0.3', vipCidr: 24, maxFailoverCount: 5, pingpongGuardSeconds: 180, heartbeatFailThreshold: 3, aiEnabled: false },
 }
 
 const nodeStore = {
-  n1: { nodeId:'n1', clusterId:1, hostname:'prod-node-01', role:'PRIMARY', state:'RUNNING', osType:'Linux', ipAddress:'10.0.1.10' },
-  n2: { nodeId:'n2', clusterId:1, hostname:'prod-node-02', role:'STANDBY', state:'RUNNING', osType:'Linux', ipAddress:'10.0.1.11' },
-  n3: { nodeId:'n3', clusterId:1, hostname:'prod-node-03', role:'STANDBY', state:'STOPPED', osType:'Linux', ipAddress:'10.0.1.12' },
-  n4: { nodeId:'n4', clusterId:2, hostname:'stg-node-01',  role:'PRIMARY', state:'RUNNING', osType:'Linux', ipAddress:'10.0.2.10' },
-  n5: { nodeId:'n5', clusterId:2, hostname:'stg-node-02',  role:'STANDBY', state:'RUNNING', osType:'Linux', ipAddress:'10.0.2.11' },
-  n6: { nodeId:'n6', clusterId:3, hostname:'dr-node-01',   role:'PRIMARY', state:'RUNNING', osType:'Linux', ipAddress:'10.0.3.10' },
-  n7: { nodeId:'n7', clusterId:3, hostname:'dr-node-02',   role:'STANDBY', state:'RUNNING', osType:'Linux', ipAddress:'10.0.3.11' },
-  n8: { nodeId:'n8', clusterId:3, hostname:'dr-node-03',   role:'FAULT',   state:'STOPPED', osType:'Linux', ipAddress:'10.0.3.12' },
+  n1: { nodeId:'n1', clusterId:C1, hostname:'prod-node-01', role:'PRIMARY', state:'RUNNING', osType:'Linux', ipAddress:'10.0.1.10' },
+  n2: { nodeId:'n2', clusterId:C1, hostname:'prod-node-02', role:'STANDBY', state:'RUNNING', osType:'Linux', ipAddress:'10.0.1.11' },
+  n3: { nodeId:'n3', clusterId:C1, hostname:'prod-node-03', role:'STANDBY', state:'STOPPED', osType:'Linux', ipAddress:'10.0.1.12' },
+  n4: { nodeId:'n4', clusterId:C2, hostname:'stg-node-01',  role:'PRIMARY', state:'RUNNING', osType:'Linux', ipAddress:'10.0.2.10' },
+  n5: { nodeId:'n5', clusterId:C2, hostname:'stg-node-02',  role:'STANDBY', state:'RUNNING', osType:'Linux', ipAddress:'10.0.2.11' },
+  n6: { nodeId:'n6', clusterId:C3, hostname:'dr-node-01',   role:'PRIMARY', state:'RUNNING', osType:'Linux', ipAddress:'10.0.3.10' },
+  n7: { nodeId:'n7', clusterId:C3, hostname:'dr-node-02',   role:'STANDBY', state:'RUNNING', osType:'Linux', ipAddress:'10.0.3.11' },
+  n8: { nodeId:'n8', clusterId:C3, hostname:'dr-node-03',   role:'FAULT',   state:'STOPPED', osType:'Linux', ipAddress:'10.0.3.12' },
 }
 
 function getClusterNodes(clusterId) {
@@ -47,7 +55,7 @@ function makeMetrics(nodeId, state) {
 
 function makeStatus(clusterId) {
   const cluster = clusterStore[clusterId]
-  if (!cluster) return { clusterId: +clusterId, clusterName: 'unknown', vip: '-', nodes: [] }
+  if (!cluster) return { clusterId: clusterId, clusterName: 'unknown', vip: '-', nodes: [] }
   const nodes = getClusterNodes(clusterId).map(n => ({
     ...n,
     metrics: makeMetrics(n.nodeId, n.state),
@@ -56,7 +64,7 @@ function makeStatus(clusterId) {
 }
 
 // GPFS 상태 오버라이드 (clusterId → nodeId → gpfsState)
-const GPFS_OVERRIDE = { 2: { n5: 'unmounted' } }
+const GPFS_OVERRIDE = { [C2]: { n5: 'unmounted' } }
 
 function makeGpfs(clusterId) {
   const s   = makeStatus(clusterId)
@@ -186,15 +194,15 @@ const APP_DEFS = {
 }
 
 const APP_OVERRIDES = {
-  1: { n1: { oracle: 'stopped' } },
-  2: { n5: { nfs: 'stopped' } },
-  3: { n8: { oracle: 'stopped' } },
+  [C1]: { n1: { oracle: 'stopped' } },
+  [C2]: { n5: { nfs: 'stopped' } },
+  [C3]: { n8: { oracle: 'stopped' } },
 }
 
 const APP_ACTIVE_NODE = {
-  1: { oracle: 'n1', nginx: 'n1', nfs: 'n1', heartbeat: 'n1', corosync: 'n1', sshd: 'n1' },
-  2: { nginx: 'n4', nfs: 'n4', heartbeat: 'n4', corosync: 'n4', sshd: 'n4' },
-  3: { oracle: 'n6', heartbeat: 'n6', corosync: 'n6', sshd: 'n6' },
+  [C1]: { oracle: 'n1', nginx: 'n1', nfs: 'n1', heartbeat: 'n1', corosync: 'n1', sshd: 'n1' },
+  [C2]: { nginx: 'n4', nfs: 'n4', heartbeat: 'n4', corosync: 'n4', sshd: 'n4' },
+  [C3]: { oracle: 'n6', heartbeat: 'n6', corosync: 'n6', sshd: 'n6' },
 }
 
 function getActiveNodeId(clusterId, appId, nodes) {
@@ -209,9 +217,9 @@ function getActiveNodeId(clusterId, appId, nodes) {
 function makeNodeApps(node, clusterId, nodes) {
   const base = ['sshd', 'heartbeat', 'corosync']
   const appsByCluster = {
-    1: ['oracle', 'nginx', 'nfs'],
-    2: ['nginx', 'nfs'],
-    3: ['oracle'],
+    [C1]: ['oracle', 'nginx', 'nfs'],
+    [C2]: ['nginx', 'nfs'],
+    [C3]: ['oracle'],
   }
   const appIds = [...base, ...(appsByCluster[clusterId] ?? [])]
   return appIds.map(id => {
@@ -467,44 +475,46 @@ const serviceStore = {
   's5': { id:'s5', name:'배치시스템',    cluster:'prod-cluster-01', swList:['Job Scheduler','Batch Worker'], status:'NORMAL' },
 }
 
-let nextInsId = 5
+// 실 백엔드는 id가 UUID. 점검/리포트는 실 DB에서 빈 목록으로 시작하지만,
+// 데모 편의를 위해 UUID id로 시드 데이터를 둔다(형태는 실 계약과 동일).
 const inspectionStore = [
-  { id:'ins1', title:'2월 정기 점검',    target:'prod-cluster-01', type:'REGULAR',   status:'IN_PROGRESS',date:'2026-06-09', inspector:'admin',    notes:'민원시스템 패치 적용 진행 중' },
-  { id:'ins2', title:'긴급 보안 패치',   target:'stg-cluster-01',  type:'EMERGENCY', status:'COMPLETED',  date:'2026-06-07', inspector:'secadmin', notes:'CVE-2024-XXXX 대응 완료' },
-  { id:'ins3', title:'1월 정기 점검',    target:'prod-cluster-01', type:'REGULAR',   status:'COMPLETED',  date:'2026-05-15', inspector:'admin',    notes:'이상 없음' },
-  { id:'ins4', title:'DR 사이트 점검',   target:'dr-cluster-01',   type:'REGULAR',   status:'SCHEDULED',  date:'2026-06-15', inspector:'admin',    notes:'' },
+  { id:uuid(), title:'2월 정기 점검',    target:'prod-cluster-01', type:'REGULAR',   status:'IN_PROGRESS',date:'2026-06-09', inspector:'admin',    notes:'민원시스템 패치 적용 진행 중' },
+  { id:uuid(), title:'긴급 보안 패치',   target:'stg-cluster-01',  type:'EMERGENCY', status:'COMPLETED',  date:'2026-06-07', inspector:'secadmin', notes:'CVE-2024-XXXX 대응 완료' },
+  { id:uuid(), title:'1월 정기 점검',    target:'prod-cluster-01', type:'REGULAR',   status:'COMPLETED',  date:'2026-05-15', inspector:'admin',    notes:'이상 없음' },
+  { id:uuid(), title:'DR 사이트 점검',   target:'dr-cluster-01',   type:'REGULAR',   status:'SCHEDULED',  date:'2026-06-15', inspector:'admin',    notes:'' },
 ]
 
 const reportStore = [
-  { id:'r1', title:'2026년 6월 시스템 운영 보고서',    type:'MONTHLY',     status:'GENERATING', createdAt:'2026-06-01', size:null  },
-  { id:'r2', title:'2026년 5월 시스템 운영 보고서',    type:'MONTHLY',     status:'READY',      createdAt:'2026-05-01', size:'2.1MB' },
-  { id:'r3', title:'장애 이력 분석 보고서 (2026 Q1)',  type:'INCIDENT',    status:'READY',      createdAt:'2026-04-01', size:'1.8MB' },
-  { id:'r4', title:'성능 분석 리포트 2026-W23',        type:'PERFORMANCE', status:'READY',      createdAt:'2026-06-06', size:'3.2MB' },
-  { id:'r5', title:'보안 감사 보고서 2026-Q1',         type:'SECURITY',    status:'READY',      createdAt:'2026-04-10', size:'2.6MB' },
+  { id:uuid(), title:'2026년 6월 시스템 운영 보고서',    type:'MONTHLY',     status:'GENERATING', createdAt:'2026-06-01', size:null  },
+  { id:uuid(), title:'2026년 5월 시스템 운영 보고서',    type:'MONTHLY',     status:'READY',      createdAt:'2026-05-01', size:'2.1MB' },
+  { id:uuid(), title:'장애 이력 분석 보고서 (2026 Q1)',  type:'INCIDENT',    status:'READY',      createdAt:'2026-04-01', size:'1.8MB' },
+  { id:uuid(), title:'성능 분석 리포트 2026-W23',        type:'PERFORMANCE', status:'READY',      createdAt:'2026-06-06', size:'3.2MB' },
+  { id:uuid(), title:'보안 감사 보고서 2026-Q1',         type:'SECURITY',    status:'READY',      createdAt:'2026-04-10', size:'2.6MB' },
 ]
 
+// 실 백엔드 V10 시드와 동일한 6종 규칙(metric/threshold/level/cooldown/enabled).
 let alertConfigStore = [
-  { id:'ac1', name:'CPU 경고',           metric:'cpu',        threshold:80, level:'WARNING',  enabled:true,  cooldownMin:5  },
-  { id:'ac2', name:'CPU 치명',           metric:'cpu',        threshold:95, level:'CRITICAL', enabled:true,  cooldownMin:2  },
-  { id:'ac3', name:'메모리 경고',        metric:'memory',     threshold:85, level:'WARNING',  enabled:true,  cooldownMin:5  },
-  { id:'ac4', name:'메모리 치명',        metric:'memory',     threshold:95, level:'CRITICAL', enabled:true,  cooldownMin:2  },
-  { id:'ac5', name:'디스크 경고',        metric:'disk',       threshold:80, level:'WARNING',  enabled:true,  cooldownMin:30 },
-  { id:'ac6', name:'노드 오프라인',      metric:'node_state', threshold:0,  level:'CRITICAL', enabled:true,  cooldownMin:1  },
-  { id:'ac7', name:'Failover 발생',      metric:'failover',   threshold:1,  level:'CRITICAL', enabled:true,  cooldownMin:0  },
-  { id:'ac8', name:'네트워크 패킷 손실', metric:'packet_loss',threshold:5,  level:'WARNING',  enabled:false, cooldownMin:10 },
+  { id:uuid(), name:'CPU 사용률 경고',   metric:'cpu',         threshold:85, level:'WARNING',  cooldownMin:5,  enabled:true  },
+  { id:uuid(), name:'메모리 사용률 경고', metric:'memory',      threshold:85, level:'WARNING',  cooldownMin:5,  enabled:true  },
+  { id:uuid(), name:'디스크 사용률 위험', metric:'disk',        threshold:90, level:'CRITICAL', cooldownMin:10, enabled:true  },
+  { id:uuid(), name:'노드 장애 감지',     metric:'node_state',  threshold:0,  level:'CRITICAL', cooldownMin:1,  enabled:true  },
+  { id:uuid(), name:'Failover 발생',     metric:'failover',    threshold:0,  level:'CRITICAL', cooldownMin:1,  enabled:true  },
+  { id:uuid(), name:'패킷 손실률 경고',   metric:'packet_loss', threshold:5,  level:'WARNING',  cooldownMin:5,  enabled:false },
 ]
 
+// 실 백엔드는 단일 행(id:1) + updatedAt를 반환한다.
 let systemSettings = {
-  pollingIntervalSec: 10, alertRetentionDays: 90,
-  metricsRetentionDays: 30, maxFailoverCount: 3,
-  pingpongGuardSec: 10, aiEnabled: true,
-  notificationEmail: 'ops@example.com', notificationSlack: '',
+  id: 1,
+  pollingIntervalSec: 5, metricsRetentionDays: 30, alertRetentionDays: 30,
+  maxFailoverCount: 5, pingpongGuardSec: 180, aiEnabled: false,
+  notificationEmail: '', notificationSlack: '',
   timezone: 'Asia/Seoul', language: 'ko',
+  updatedAt: new Date().toISOString(),
 }
 
 // HA 운영 절차 (기동/중지/Failover 시퀀스)
 const haSequenceStore = {
-  1: {
+  [C1]: {
     STARTUP: [
       { id:'su1-1', order:1, action:'START', serviceType:'DB',  serviceName:'Oracle',   nodeRole:'PRIMARY', waitAfterSec:30, description:'Oracle DB 기동 후 리스너 확인' },
       { id:'su1-2', order:2, action:'START', serviceType:'WAS', serviceName:'WebLogic', nodeRole:'PRIMARY', waitAfterSec:20, description:'WAS 기동 및 헬스체크 확인' },
@@ -525,7 +535,7 @@ const haSequenceStore = {
       { id:'fo1-7', order:7, action:'START',        serviceType:'WEB', serviceName:'Nginx',    nodeRole:'STANDBY', waitAfterSec:5,  description:'Standby WEB 기동 및 서비스 확인' },
     ],
   },
-  2: {
+  [C2]: {
     STARTUP: [
       { id:'su2-1', order:1, action:'START', serviceType:'WAS', serviceName:'Tomcat',   nodeRole:'PRIMARY', waitAfterSec:20, description:'Tomcat 기동' },
       { id:'su2-2', order:2, action:'START', serviceType:'WEB', serviceName:'Nginx',    nodeRole:'PRIMARY', waitAfterSec:5,  description:'Nginx 기동' },
@@ -542,7 +552,7 @@ const haSequenceStore = {
       { id:'fo2-5', order:5, action:'START',        serviceType:'WEB', serviceName:'Nginx',  nodeRole:'STANDBY', waitAfterSec:5,  description:'Standby WEB 기동' },
     ],
   },
-  3: {
+  [C3]: {
     STARTUP: [
       { id:'su3-1', order:1, action:'START', serviceType:'DB',  serviceName:'Oracle',   nodeRole:'PRIMARY', waitAfterSec:30, description:'DR DB 기동' },
       { id:'su3-2', order:2, action:'START', serviceType:'WEB', serviceName:'Nginx',    nodeRole:'PRIMARY', waitAfterSec:5,  description:'DR WEB 기동' },
@@ -639,6 +649,34 @@ const server = http.createServer((req, res) => {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
 
   if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return }
+
+  // ── 인증 (개발용 mock) ──────────────────────────────────────────
+  // 실제 백엔드 AuthController 와 동일한 응답 형태({ token, username, role })를
+  // 돌려준다. dev 환경에서 admin/admin 으로 로그인할 수 있도록 한다.
+  if (req.url === '/api/auth/login' && req.method === 'POST') {
+    let body = ''; req.on('data', d => { body += d })
+    req.on('end', () => {
+      const { username, password } = JSON.parse(body || '{}')
+      if (!username || !password) {
+        res.writeHead(400); res.end(JSON.stringify({ error: 'username/password 필요' })); return
+      }
+      const DEV_USERS = {
+        admin:    { password: 'admin',    role: 'admin' },
+        operator: { password: 'operator', role: 'operator' },
+        viewer:   { password: 'viewer',   role: 'viewer' },
+      }
+      const u = DEV_USERS[username]
+      if (!u || u.password !== password) {
+        res.writeHead(401); res.end(JSON.stringify({ error: '인증 실패' })); return
+      }
+      res.writeHead(200); res.end(JSON.stringify({
+        token: `mock-${username}-${Date.now()}`,
+        username,
+        role: u.role,
+      }))
+    })
+    return
+  }
 
   // ── SW / DB / Docker / Runbook / Inspection / Report / Alert / Settings ──
   if (req.url === '/api/sw' && req.method === 'GET') {
@@ -832,17 +870,17 @@ const server = http.createServer((req, res) => {
   }
 
   // ── 하트비트 / 메타데이터 동기화 ────────────────────────────────
-  const mHb = req.url.match(/^\/api\/ha\/heartbeat\/(\d+)$/)
+  const mHb = req.url.match(/^\/api\/ha\/heartbeat\/([\w-]+)$/)
   if (mHb && req.method === 'GET') { res.writeHead(200); res.end(JSON.stringify(makeHeartbeat(+mHb[1]))); return }
 
-  const mMeta = req.url.match(/^\/api\/ha\/metadata-sync\/(\d+)$/)
+  const mMeta = req.url.match(/^\/api\/ha\/metadata-sync\/([\w-]+)$/)
   if (mMeta) {
     if (req.method === 'GET') { res.writeHead(200); res.end(JSON.stringify(makeMetadataSync(+mMeta[1]))); return }
     if (req.method === 'POST') { res.writeHead(200); res.end(JSON.stringify({ success: true, message: '동기화가 시작되었습니다.' })); return }
   }
 
   // ── HA 운영 절차 시퀀스 ───────────────────────────────────────
-  const mHaSeq = req.url.match(/^\/api\/ha\/sequences\/(\d+)$/)
+  const mHaSeq = req.url.match(/^\/api\/ha\/sequences\/([\w-]+)$/)
   if (mHaSeq) {
     const cid = +mHaSeq[1]
     if (req.method === 'GET') {
@@ -888,15 +926,15 @@ const server = http.createServer((req, res) => {
   if (req.url === '/api/dashboard/docker')      { res.writeHead(200); res.end(JSON.stringify(makeDashboardDocker())); return }
   if (req.url === '/api/dashboard/performance') { res.writeHead(200); res.end(JSON.stringify(makeDashboardPerformance())); return }
 
-  const mStatus    = req.url.match(/^\/api\/clusters\/(\d+)\/status$/)
-  const mGpfs      = req.url.match(/^\/api\/clusters\/(\d+)\/gpfs$/)
-  const mNetwork   = req.url.match(/^\/api\/clusters\/(\d+)\/network$/)
-  const mFailover  = req.url.match(/^\/api\/clusters\/(\d+)\/failover$/)
-  const mAi        = req.url.match(/^\/api\/clusters\/(\d+)\/ai-analysis$/)
-  const mAgent     = req.url.match(/^\/api\/clusters\/(\d+)\/agent$/)
-  const mNodes     = req.url.match(/^\/api\/clusters\/(\d+)\/nodes$/)
-  const mNodeId    = req.url.match(/^\/api\/clusters\/(\d+)\/nodes\/([^/]+)$/)
-  const mCluster   = req.url.match(/^\/api\/clusters\/(\d+)$/)
+  const mStatus    = req.url.match(/^\/api\/clusters\/([\w-]+)\/status$/)
+  const mGpfs      = req.url.match(/^\/api\/clusters\/([\w-]+)\/gpfs$/)
+  const mNetwork   = req.url.match(/^\/api\/clusters\/([\w-]+)\/network$/)
+  const mFailover  = req.url.match(/^\/api\/clusters\/([\w-]+)\/failover$/)
+  const mAi        = req.url.match(/^\/api\/clusters\/([\w-]+)\/ai-analysis$/)
+  const mAgent     = req.url.match(/^\/api\/clusters\/([\w-]+)\/agent$/)
+  const mNodes     = req.url.match(/^\/api\/clusters\/([\w-]+)\/nodes$/)
+  const mNodeId    = req.url.match(/^\/api\/clusters\/([\w-]+)\/nodes\/([^/]+)$/)
+  const mCluster   = req.url.match(/^\/api\/clusters\/([\w-]+)$/)
 
   // 클러스터 상태
   if (mStatus)  { res.writeHead(200); res.end(JSON.stringify(makeStatus(+mStatus[1]))); return }
@@ -937,7 +975,7 @@ const server = http.createServer((req, res) => {
     return
   }
 
-  const mAppFailover = req.url.match(/^\/api\/clusters\/(\d+)\/apps\/failover$/)
+  const mAppFailover = req.url.match(/^\/api\/clusters\/([\w-]+)\/apps\/failover$/)
   if (mAppFailover && req.method === 'POST') {
     let body = ''
     req.on('data', d => { body += d })
@@ -957,7 +995,7 @@ const server = http.createServer((req, res) => {
     return
   }
 
-  const mAppControl = req.url.match(/^\/api\/clusters\/(\d+)\/apps\/control$/)
+  const mAppControl = req.url.match(/^\/api\/clusters\/([\w-]+)\/apps\/control$/)
   if (mAppControl && req.method === 'POST') {
     let body = ''
     req.on('data', d => { body += d })

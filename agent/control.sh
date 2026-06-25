@@ -26,6 +26,11 @@
 #   dir-sync  <destHbIp> <src> <dst> [--delete] [--exclude=PAT]  rsync over SSH
 #   ssh-keygen-nemesis                  rsync용 SSH 키 생성, 공개키 출력(멱등)
 #   ssh-authorize <pubkey>              peer 공개키 신뢰 등록(멱등)
+#   health                              진단: uptime/메모리/디스크/상위 프로세스(읽기전용)
+#   logs [n=50]                         진단: 최근 시스템 로그 n줄(읽기전용)
+#   replication                         진단: GPFS 상태 + GPFS/NFS 마운트(읽기전용)
+#   cluster-join                        정지 노드 클러스터 재참여(GPFS mmstartup)
+#   maintenance                         유지보수 모드 표시(전용 — 실제 차단은 vip-down/svc-stop)
 # =============================================================================
 export LC_ALL=C LANG=C
 
@@ -311,10 +316,64 @@ ssh_authorize() {
 }
 
 # ----------------------------------------------------------------------------
+# 진단(읽기전용) — 대시보드 Runbook의 안전(SAFE) 작업용. AIX/Linux 공통 best-effort.
+# ----------------------------------------------------------------------------
+health_check() {
+  echo "== uptime =="; uptime 2>/dev/null || true
+  echo "== memory =="
+  if   has free;  then free -m 2>/dev/null
+  elif has svmon; then svmon -G 2>/dev/null           # AIX
+  else vmstat 2>/dev/null || true
+  fi
+  echo "== disk =="; df -h 2>/dev/null || df -k 2>/dev/null || true
+  echo "== top processes (cpu) =="
+  ps -eo pcpu,pmem,args 2>/dev/null | sort -rn | head -6 || ps aux 2>/dev/null | head -6 || true
+  exit 0
+}
+
+recent_logs() {
+  n="${1:-50}"
+  if has journalctl; then journalctl -n "$n" --no-pager 2>/dev/null && exit 0; fi
+  for f in /var/log/syslog /var/log/messages; do
+    [ -f "$f" ] && { tail -n "$n" "$f" 2>/dev/null; exit 0; }
+  done
+  has errpt && { errpt 2>/dev/null | head -n "$n"; exit 0; }   # AIX
+  echo "조회 가능한 시스템 로그가 없습니다(syslog/messages/journalctl/errpt 없음)."; exit 0
+}
+
+replication_status() {
+  echo "== GPFS 상태 =="
+  if has mmgetstate; then mmgetstate -Y 2>/dev/null || mmgetstate 2>/dev/null || true
+  else echo "GPFS(mmgetstate) 미설치"; fi
+  echo "== GPFS/NFS 마운트 =="
+  df -h 2>/dev/null | grep -iE 'gpfs|nfs' || echo "GPFS/NFS 마운트 없음"
+  exit 0
+}
+
+cluster_join() {
+  if has mmstartup; then
+    mmstartup 2>/dev/null && { log "GPFS 노드 기동"; exit 0; } || die "mmstartup 실패"
+  fi
+  echo "이 노드에는 GPFS(mmstartup)가 없어 자동 재참여를 지원하지 않습니다(수동 확인 필요)."
+  exit 0
+}
+
+maintenance_mode() {
+  echo "유지보수 모드 표시: $(hostname 2>/dev/null) @ $(date 2>/dev/null)"
+  echo "참고: 실제 트래픽 차단은 VIP 해제(vip-down) 또는 서비스 중지(svc-stop)로 수행하세요. 이 명령은 표시 전용입니다."
+  exit 0
+}
+
+# ----------------------------------------------------------------------------
 # 디스패치
 # ----------------------------------------------------------------------------
 SUB=$1; [ -n "$SUB" ] || usage; shift
 case "$SUB" in
+  health)      health_check ;;
+  logs)        recent_logs "$1" ;;
+  replication) replication_status ;;
+  cluster-join) cluster_join ;;
+  maintenance) maintenance_mode ;;
   vip-up)      vip_up "$@" ;;
   vip-down)    vip_down "$@" ;;
   vip-check)   vip_present "$1" && { log "VIP $1 present"; exit 0; } || { log "VIP $1 absent"; exit 1; } ;;

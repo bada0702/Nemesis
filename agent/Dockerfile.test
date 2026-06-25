@@ -1,0 +1,12 @@
+# bot-02 standby 노드 시뮬레이션용 테스트 이미지
+# 에이전트는 stdlib만 사용. control.sh vip-up 위해 iproute2/arping 포함.
+FROM python:3.12-slim
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    iproute2 iputils-arping iputils-ping procps bc \
+ && rm -rf /var/lib/apt/lists/*
+WORKDIR /opt/nemesis-agent
+COPY nemesis-agent.py control.sh collect.sh collect_aix.sh ./
+COPY healing ./healing
+RUN chmod +x control.sh collect.sh collect_aix.sh healing/*.sh 2>/dev/null || true
+# start 명령은 docker run에서 인자로 전달
+ENTRYPOINT ["python3", "nemesis-agent.py"]

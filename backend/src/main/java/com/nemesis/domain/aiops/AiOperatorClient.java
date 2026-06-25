@@ -47,10 +47,15 @@ public class AiOperatorClient {
         }
     }
 
-    public String chat(String message) {
+    public String chat(String message) { return chat(message, null); }
+
+    /** userToken: 채팅 요청자(operator)의 토큰. 페일오버 등 제어 도구가 RBAC를 지키며 호출하도록 전달. */
+    public String chat(String message, String userToken) {
         try {
-            HttpEntity<Map<String, Object>> req =
-                    new HttpEntity<>(Map.of("message", message), headers());
+            Map<String, Object> bodyMap = new java.util.HashMap<>();
+            bodyMap.put("message", message);
+            if (userToken != null && !userToken.isBlank()) bodyMap.put("userToken", userToken);
+            HttpEntity<Map<String, Object>> req = new HttpEntity<>(bodyMap, headers());
             Map<?, ?> r = rt.postForObject(props.getBaseUrl() + "/ai/chat", req, Map.class);
             return r != null ? String.valueOf(r.get("reply")) : null;
         } catch (Exception e) {

@@ -25,6 +25,12 @@ public class RunbookController {
         return ResponseEntity.ok(runbookService.create(body));
     }
 
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> delete(@PathVariable Long id) {
+        runbookService.delete(id);
+        return ResponseEntity.noContent().build();
+    }
+
     @PatchMapping("/{id}/step")
     public ResponseEntity<Map<String, Object>> advanceStep(
             @PathVariable Long id,

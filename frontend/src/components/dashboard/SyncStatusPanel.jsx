@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Server, CheckCircle2, Zap } from 'lucide-react'
+import { Server, CheckCircle2, Zap, Network } from 'lucide-react'
 import { triggerFailover } from '../../api/client'
 import { useAuth } from '../../auth/AuthContext'
 
@@ -44,6 +44,16 @@ export default function SyncStatusPanel({ agents = [], onRefresh }) {
   const pm = primary?.metrics ?? {}
   const sm = standby?.metrics ?? {}
   const syncOk = !agent.failoverEvent && primary && standby
+
+  // 동기화 지연(Lag): primary/standby의 마지막 heartbeat 보고 시각 차이로 산출한다.
+  // (이전에는 0ms 고정값이었음 — 실제 두 노드의 heartbeat 시각 격차를 표시)
+  const lag = (() => {
+    const pt = primary?.lastSeenAt ? new Date(primary.lastSeenAt).getTime() : null
+    const st = standby?.lastSeenAt ? new Date(standby.lastSeenAt).getTime() : null
+    if (pt == null || st == null) return null
+    return Math.abs(pt - st)
+  })()
+  const lagText = lag == null ? '—' : (lag < 1000 ? `${lag}ms` : `${(lag / 1000).toFixed(1)}s`)
 
   async function handleFailover() {
     if (!standby) { alert('승격 가능한 standby 노드가 없어 수동 전환을 할 수 없습니다.'); return }
@@ -98,16 +108,26 @@ export default function SyncStatusPanel({ agents = [], onRefresh }) {
 
       {/* Primary / Sync / Standby */}
       <div className="flex justify-between items-center mb-8 relative">
-        {/* Primary */}
+        {/* Primary (VIP 보유 노드) */}
         <div className="text-center w-1/3">
           <span className="text-[10px] status-green font-bold">PRIMARY</span>
           <p className="text-lg font-bold text-white">{primary?.hostname ?? '—'}</p>
           <p className="text-xs text-gray-500 mb-4">{primary?.serviceIp ?? primary?.heartbeatIp ?? ''}</p>
           <div className="flex justify-center">
-            <div className="w-24 h-16 bg-blue-900/30 rounded border border-blue-500/50 flex items-center justify-center">
+            <div className="relative w-24 h-16 bg-blue-900/30 rounded border border-blue-500/50 flex items-center justify-center">
               <Server className="w-10 h-10 text-blue-400" />
+              {agent.vip && primary && (
+                <span
+                  title={`VIP ${agent.vip} 적용됨`}
+                  className="absolute -top-2 -right-2 flex items-center gap-0.5 bg-emerald-500/90 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full shadow">
+                  <Network className="w-3 h-3" /> VIP
+                </span>
+              )}
             </div>
           </div>
+          {agent.vip && primary && (
+            <p className="mt-1 text-[10px] text-emerald-400 font-mono">{agent.vip}</p>
+          )}
         </div>
 
         {/* Sync indicator */}
@@ -164,9 +184,10 @@ export default function SyncStatusPanel({ agents = [], onRefresh }) {
               {syncOk ? 'SYNC OK' : 'DEGRADED'}
             </span>
           </div>
-          <div className="flex justify-between border-b border-gray-800 pb-1">
+          <div className="flex justify-between border-b border-gray-800 pb-1"
+            title="Primary·Standby의 마지막 heartbeat 보고 시각 차이">
             <span className="text-gray-500">지연 시간 (Lag)</span>
-            <span className="text-white font-medium">0ms</span>
+            <span className="text-white font-medium">{lagText}</span>
           </div>
           <div className="flex justify-between border-b border-gray-800 pb-1">
             <span className="text-gray-500">마지막 동기화</span>

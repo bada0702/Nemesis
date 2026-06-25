@@ -40,10 +40,59 @@ public class AiFindingService {
             repo.save(f);
             return;
         }
+        if (refreshIgnored(fp)) return;         // 사용자가 무시한 신호 → 다시 띄우지 않음
         AiFinding f = newFinding(s, category);
         f.setSummary(summary(s));
         explainErrorPattern(s, f);              // 신규일 때만 SSH 없는 경량 LLM 설명
         repo.save(f);
+    }
+
+    /** 무시된 동일 지문이 있으면 lastSeen만 갱신하고 true. 무시를 sticky하게 유지. */
+    private boolean refreshIgnored(String fp) {
+        Optional<AiFinding> ig = repo.findByFingerprintAndStatus(fp, AiFinding.IGNORED);
+        if (ig.isEmpty()) return false;
+        AiFinding f = ig.get();
+        f.setLastSeenAt(OffsetDateTime.now());
+        repo.save(f);
+        return true;
+    }
+
+    /** 단일 finding 재분석(캐시된 에러 텍스트로 LLM 재호출). 모델 미존재 등 실패 사유는 diagnosis에 반영. */
+    @Transactional
+    public AiFinding reanalyze(UUID id) {
+        AiFinding f = repo.findById(id).orElseThrow(() -> new IllegalArgumentException("finding 없음: " + id));
+        if (llm == null || !llm.isAvailable()) {
+            f.setDiagnosis("LLM 미설정 — 시스템 설정에서 분석 모델을 지정하세요.");
+        } else {
+            String errorText = errorText(parseDetail(f.getDetail()));
+            if (errorText.isBlank()) {
+                f.setDiagnosis("재분석할 에러 텍스트가 없습니다(원격 조사 필요).");
+            } else {
+                Map<String, Object> r = llm.analyze(errorText);
+                Object rc = r != null ? r.get("rootCause") : null;
+                if (rc != null) f.setDiagnosis(String.valueOf(rc));
+            }
+        }
+        f.setLastSeenAt(OffsetDateTime.now());
+        return repo.save(f);
+    }
+
+    /** 무시: 상태를 IGNORED로 — 목록에서 빠지고 동일 신호가 재발해도 다시 뜨지 않음. */
+    @Transactional
+    public AiFinding ignore(UUID id) {
+        AiFinding f = repo.findById(id).orElseThrow(() -> new IllegalArgumentException("finding 없음: " + id));
+        f.setStatus(AiFinding.IGNORED);
+        return repo.save(f);
+    }
+
+    /** 삭제: 완전 제거(다음 스캔에서 동일 신호면 새로 생성될 수 있음). */
+    @Transactional
+    public void delete(UUID id) { repo.deleteById(id); }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> parseDetail(String json) {
+        try { return mapper.readValue(json == null || json.isBlank() ? "{}" : json, Map.class); }
+        catch (Exception e) { return Map.of(); }
     }
 
     /** LOG_ERROR_PATTERN 신규 finding은 캐시된 에러 텍스트만으로 LLM 설명을 붙인다(SSH 불필요). */
@@ -80,6 +129,7 @@ public class AiFindingService {
             repo.save(f);
             return;
         }
+        if (refreshIgnored(fp)) return;         // 무시한 신호는 제안도 다시 만들지 않음
         AiFinding f = newFinding(s, category);
         f.setSeverity(sf != null ? sf.severity() : s.severity());
         f.setSummary(sf != null ? sf.summary() : summary(s));

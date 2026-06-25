@@ -4,7 +4,7 @@ setlocal enabledelayedexpansion
 set ROOT=%~dp0
 set FRONTEND=%ROOT%frontend
 set API_PORT=18080
-set UI_PORT=5173
+set UI_PORT=5174
 set VITE_JS=%FRONTEND%\node_modules\vite\bin\vite.js
 
 set CMD=%1

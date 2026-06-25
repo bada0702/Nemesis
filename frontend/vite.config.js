@@ -5,7 +5,8 @@ export default defineConfig({
   plugins: [react()],
   base: '/',
   server: {
-    port: 5173,
+    port: 5174,
+    allowedHosts: ['chojungwon.iptime.org'],
     proxy: {
       '/api': {
         target: 'http://localhost:18080',

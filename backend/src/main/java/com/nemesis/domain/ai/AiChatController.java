@@ -21,14 +21,19 @@ public class AiChatController {
             "AIX/Linux 엔터프라이즈 인프라·고가용성·장애 분석 전문가로서 한국어로 간결하게 답하세요.";
 
     @PostMapping("/chat")
-    public ResponseEntity<Map<String, String>> chat(@RequestBody Map<String, String> req) {
+    public ResponseEntity<Map<String, String>> chat(
+            @RequestBody Map<String, String> req,
+            @RequestHeader(value = "Authorization", required = false) String auth) {
         String message = req.getOrDefault("message", "").trim();
         if (message.isEmpty())
             return ResponseEntity.badRequest().body(Map.of("error", "message가 비어 있습니다."));
 
+        // 요청자 토큰을 aibot에 전달 → 페일오버 등 제어 도구가 operator 권한으로 RBAC 통과.
+        String userToken = (auth != null && auth.startsWith("Bearer ")) ? auth.substring(7) : null;
+
         // 1순위: aibot(에이전트 루프). 불통이면 LLM 단발 폴백.
         if (aibot.health()) {
-            String reply = aibot.chat(message);
+            String reply = aibot.chat(message, userToken);
             if (reply != null) return ResponseEntity.ok(Map.of("reply", reply));
         }
         if (!llmService.isAvailable())

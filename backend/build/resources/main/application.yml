@@ -27,16 +27,21 @@ nemesis:
   llm:
     provider: ${LLM_PROVIDER:ollama}          # ollama | openai | anthropic
     timeout-seconds: ${LLM_TIMEOUT:10}
+    chat-timeout-seconds: ${LLM_CHAT_TIMEOUT:90}
     confidence-threshold: ${LLM_CONFIDENCE:0.7}
     ollama:
       base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
       model: ${LLM_MODEL:gemma2:9b}
+      chat-model: ${LLM_CHAT_MODEL:}
     openai:
       api-key: ${OPENAI_API_KEY:}
       model: ${OPENAI_MODEL:gpt-4o-mini}
     anthropic:
       api-key: ${ANTHROPIC_API_KEY:}
       model: ${ANTHROPIC_MODEL:claude-haiku-4-5}
+  agent:
+    files-dir: ${NEMESIS_AGENT_DIR:/var/www/html/Nemesis_v100/agent}
+    management-url: ${NEMESIS_MGMT_URL:https://localhost:18080}
   detection:
     scan-interval-ms: ${DETECT_SCAN_INTERVAL_MS:1000}
     push-interval-seconds: ${DETECT_PUSH_INTERVAL:3}
@@ -45,6 +50,24 @@ nemesis:
     cpu-threshold: ${DETECT_CPU_THRESHOLD:85}
     mem-threshold: ${DETECT_MEM_THRESHOLD:85}
     disk-threshold: ${DETECT_DISK_THRESHOLD:90}
+  aiops:
+    enabled: ${NEMESIS_AIOPS_ENABLED:false}
+    base-url: ${NEMESIS_AIBOT_URL:http://localhost:18900}
+    token: ${NEMESIS_AIBOT_TOKEN:}
+    ssh-user: ${NEMESIS_AIOPS_SSH_USER:root}
+    timeout-seconds: ${NEMESIS_AIOPS_TIMEOUT:120}
+    proposal-ttl-minutes: ${NEMESIS_AIOPS_TTL:30}
+    monitor:
+      enabled: ${NEMESIS_AIOPS_MONITOR_ENABLED:false}
+      interval-ms: ${NEMESIS_AIOPS_MONITOR_INTERVAL_MS:300000}
+      disk-threshold: ${NEMESIS_AIOPS_MONITOR_DISK:90}
+      mem-threshold: ${NEMESIS_AIOPS_MONITOR_MEM:90}
+      cpu-threshold: ${NEMESIS_AIOPS_MONITOR_CPU:90}
+      cpu-sustained-cycles: ${NEMESIS_AIOPS_MONITOR_CPU_CYCLES:3}
+      critical-band-offset: ${NEMESIS_AIOPS_MONITOR_CRIT_OFFSET:5}
+      error-pattern-count: ${NEMESIS_AIOPS_MONITOR_ERR_COUNT:3}
+      event-spike-window-ms: ${NEMESIS_AIOPS_MONITOR_SPIKE_WINDOW_MS:600000}
+      event-spike-count: ${NEMESIS_AIOPS_MONITOR_SPIKE_COUNT:5}
 
 logging:
   level:

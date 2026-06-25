@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { Settings, RefreshCw, ToggleLeft, ToggleRight } from 'lucide-react'
 import { getAlertConfigs, updateAlertConfig } from '../../api/client'
-import ComingSoon from '../../components/ComingSoon'
 
 const METRIC_LABELS = { cpu: 'CPU 사용률', memory: '메모리 사용률', disk: '디스크 사용률', node_state: '노드 상태', failover: 'Failover', packet_loss: '패킷 손실률' }
 const LEVEL_CLS     = { CRITICAL: 'bg-red-500/20 text-red-400', WARNING: 'bg-yellow-500/20 text-yellow-400' }
@@ -34,7 +33,6 @@ export default function AlertConfig() {
 
   return (
     <div className="p-8 pt-0 space-y-6">
-      <ComingSoon feature="알림 채널 설정" />
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-bold text-white">알람 설정</h2>

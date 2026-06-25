@@ -19,14 +19,16 @@ public class AuthController {
         String username = body.get("username");
         String password = body.get("password");
         if (username == null || password == null) {
-            return ResponseEntity.badRequest().body(Map.of("error", "username/password 필요"));
+            return ResponseEntity.badRequest().body(Map.of("error", "아이디와 비밀번호를 모두 입력하세요."));
         }
         return authService.login(username, password)
                 .<ResponseEntity<Map<String, Object>>>map(r -> ResponseEntity.ok(Map.of(
                         "token", r.token(),
                         "username", r.username(),
                         "role", r.role().name())))
-                .orElseGet(() -> ResponseEntity.status(401).body(Map.of("error", "인증 실패")));
+                // 보안상 아이디/비밀번호 중 무엇이 틀렸는지는 구분하지 않되, 사용자가 다음 행동을 알 수 있게 안내.
+                .orElseGet(() -> ResponseEntity.status(401).body(Map.of(
+                        "error", "아이디 또는 비밀번호가 올바르지 않습니다. (Caps Lock 확인, 또는 관리자에게 계정 문의)")));
     }
 
     /** 사용자 생성(admin 전용 — RBAC 필터가 보호). */

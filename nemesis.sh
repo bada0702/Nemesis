@@ -5,11 +5,13 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FRONTEND="$ROOT/frontend"
 API_PORT=18080
-UI_PORT=5173
+UI_PORT=5174
 API_LOG="$ROOT/api.log"
 UI_LOG="$ROOT/ui.log"
 API_PID="$ROOT/.api.pid"
 UI_PID="$ROOT/.ui.pid"
+API_PORT_FILE="$ROOT/.api.port"
+UI_PORT_FILE="$ROOT/.ui.port"
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
 CYAN='\033[0;36m'; BOLD='\033[1m'; NC='\033[0m'
@@ -21,6 +23,15 @@ err()   { echo -e "  ${RED}[ERR ]${NC}  $*"; }
 
 port_in_use() {
     lsof -ti tcp:"$1" &>/dev/null
+}
+
+# Find the first free TCP port at or above $1
+find_free_port() {
+    local p="$1"
+    while lsof -ti tcp:"$p" &>/dev/null; do
+        p=$((p+1))
+    done
+    echo "$p"
 }
 
 read_pid() {
@@ -60,6 +71,7 @@ cmd_start() {
         info "Starting Mock API on port $API_PORT..."
         node "$ROOT/mock-api.js" >> "$API_LOG" 2>&1 &
         echo $! > "$API_PID"
+        echo "$API_PORT" > "$API_PORT_FILE"
         sleep 1
         if is_running "$API_PID"; then
             ok "Mock API started  (PID $(read_pid "$API_PID"))"
@@ -72,15 +84,19 @@ cmd_start() {
     # Vite UI
     if is_running "$UI_PID"; then
         warn "Vite UI already running (PID $(read_pid "$UI_PID"))"
-    elif port_in_use "$UI_PORT"; then
-        warn "Port $UI_PORT in use by another process"
     else
+        if port_in_use "$UI_PORT"; then
+            local newport; newport=$(find_free_port "$UI_PORT")
+            warn "Port $UI_PORT in use by another process -- using port $newport instead"
+            UI_PORT="$newport"
+        fi
         info "Starting Vite UI on port $UI_PORT..."
-        (cd "$FRONTEND" && npx vite --host >> "$UI_LOG" 2>&1) &
+        (cd "$FRONTEND" && npx vite --host --port "$UI_PORT" --strictPort >> "$UI_LOG" 2>&1) &
         echo $! > "$UI_PID"
+        echo "$UI_PORT" > "$UI_PORT_FILE"
         sleep 3
         if is_running "$UI_PID"; then
-            ok "Vite UI started   (PID $(read_pid "$UI_PID"))"
+            ok "Vite UI started   (PID $(read_pid "$UI_PID"))  port=$UI_PORT"
         else
             err "Vite UI failed. Check: $UI_LOG"
             exit 1
@@ -118,7 +134,13 @@ cmd_stop() {
         fi
     done
 
-    for port in "$API_PORT" "$UI_PORT"; do
+    # Only clean up ports WE recorded on start -- never blindly kill whatever
+    # happens to sit on the default 5173/18080 (could be another project).
+    for portfile in "$API_PORT_FILE" "$UI_PORT_FILE"; do
+        [ -f "$portfile" ] || continue
+        local port; port=$(cat "$portfile" 2>/dev/null || true)
+        rm -f "$portfile"
+        [ -n "$port" ] || continue
         local pids; pids=$(lsof -ti tcp:"$port" 2>/dev/null || true)
         if [ -n "$pids" ]; then
             echo "$pids" | xargs kill -9 2>/dev/null || true

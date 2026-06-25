@@ -18,6 +18,7 @@ public class ClusterController {
 
     private final ClusterService clusterService;
     private final NodeService    nodeService;
+    private final VipService     vipService;
 
     @PostMapping
     public ResponseEntity<Cluster> create(@RequestBody Map<String, Object> body) {
@@ -43,7 +44,30 @@ public class ClusterController {
     @PutMapping("/{id}")
     public ResponseEntity<Cluster> update(@PathVariable UUID id,
                                           @RequestBody Map<String, Object> body) {
-        return ResponseEntity.ok(clusterService.update(id, body));
+        Cluster updated = clusterService.update(id, body);
+        // VIP 변경 시 primary 노드 OS에 실제 별칭을 반영(비동기 best-effort)
+        if (body.get("vip") != null && updated.getVip() != null && !updated.getVip().isBlank()) {
+            vipService.applyAsync(id);
+        }
+        return ResponseEntity.ok(updated);
+    }
+
+    /** VIP 수동 적용: primary에 vip-up, 그 외 노드 vip-down. 노드별 결과 반환. */
+    @PostMapping("/{id}/vip/apply")
+    public ResponseEntity<Map<String, Object>> applyVip(@PathVariable UUID id) {
+        return ResponseEntity.ok(vipService.apply(id));
+    }
+
+    /** VIP 전체 해제: 모든 노드에서 vip-down (이중화 중지). */
+    @PostMapping("/{id}/vip/down")
+    public ResponseEntity<Map<String, Object>> downVip(@PathVariable UUID id) {
+        return ResponseEntity.ok(vipService.down(id));
+    }
+
+    /** 노드별 VIP 존재 여부 점검(vip-check). */
+    @GetMapping("/{id}/vip/status")
+    public ResponseEntity<Map<String, Object>> vipStatus(@PathVariable UUID id) {
+        return ResponseEntity.ok(vipService.status(id));
     }
 
     @DeleteMapping("/{id}")

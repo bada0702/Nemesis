@@ -30,6 +30,12 @@ public class AiProposal {
     /** JSON 배열 문자열: [{description,command,target,riskLevel}] */
     @Column(name = "proposed_actions", columnDefinition = "TEXT") private String proposedActions;
 
+    /** SP6 가드레일: 서버 권위 재판정 결과. */
+    @Column(name = "max_risk_level", length = 10) private String maxRiskLevel;
+    @Column(name = "requires_manual") private boolean requiresManual;
+    @Column(name = "blocked") private boolean blocked;
+    @Column(name = "blocked_reason", columnDefinition = "TEXT") private String blockedReason;
+
     @Column(nullable = false, length = 20) private String status;
 
     @Column(name = "execution_log", columnDefinition = "TEXT") private String executionLog;

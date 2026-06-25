@@ -62,6 +62,8 @@ public class AiFaultService {
         return analysisRepository.findTopByNodeIdOrderByCreatedAtDesc(nodeId);
     }
 
+    private static final double RESOURCE_WARN_PCT = 85.0;
+
     @Transactional(readOnly = true)
     public Map<String, Object> analyzeCluster(UUID clusterId) {
         Cluster cluster = clusterRepository.findById(clusterId)
@@ -69,20 +71,72 @@ public class AiFaultService {
         List<Node> nodes = nodeRepository.findByClusterId(clusterId);
         long faults = nodes.stream().filter(n -> n.getRole() == Node.Role.fault).count();
 
-        String prompt = String.format(
-                "클러스터 '%s' (VIP: %s) 상태: 전체 노드 %d개 중 장애 %d개. " +
-                "노드 목록: %s. " +
-                "장애 원인을 한국어로 분석하고 복구 절차를 제시하라.",
-                cluster.getName(), cluster.getVip(),
-                nodes.size(), faults,
-                nodes.stream()
-                     .map(n -> n.getHostname() + "(" + n.getRole() + ")")
-                     .collect(Collectors.joining(", "))
-        );
+        // 노드 역할만 넘기던 과거 프롬프트는 입력이 빈약해 결과도 한 줄짜리였다.
+        // 자원·상태·에러로그를 포함한 상세 컨텍스트를 구성해 진단 품질을 높인다.
+        boolean anyHigh = false;
+        StringBuilder ctx = new StringBuilder();
+        ctx.append(String.format("클러스터 '%s' (VIP: %s) — 전체 노드 %d개, 장애(fault) %d개.%n",
+                cluster.getName(), cluster.getVip() != null ? cluster.getVip() : "없음", nodes.size(), faults));
+        for (Node n : nodes) {
+            MetricsPushRequest m = metricsCache.get(n.getId()).orElse(null);
+            ctx.append(String.format("- %s: role=%s, ip=%s", n.getHostname(), n.getRole(),
+                    n.getIpAddress() != null ? n.getIpAddress() : "?"));
+            if (m != null) {
+                ctx.append(String.format(", CPU %.0f%%, MEM %.0f%%, DISK %.0f%%",
+                        m.getCpuPercent(), m.getMemoryPercent(), m.getDiskPercent()));
+                if (m.getCpuPercent() >= RESOURCE_WARN_PCT || m.getMemoryPercent() >= RESOURCE_WARN_PCT
+                        || m.getDiskPercent() >= RESOURCE_WARN_PCT) anyHigh = true;
+                List<String> errs = m.getErrorLogPreview();
+                if (errs != null && !errs.isEmpty())
+                    ctx.append("\n  최근 에러로그: ").append(String.join(" | ",
+                            errs.subList(0, Math.min(3, errs.size()))));
+            } else {
+                ctx.append(", 메트릭 수신 없음(무응답/다운 추정)");
+            }
+            ctx.append(String.format(", 마지막 보고=%s%n",
+                    n.getLastSeenAt() != null ? n.getLastSeenAt() : "기록 없음"));
+        }
+        ctx.append("위 상태를 진단하라.");
 
-        Map<String, Object> result = llmService.analyze(prompt);
-        String severity = faults > 0 ? "critical" : "normal";
-        return Map.of("status", "success", "analysis", result.get("rootCause"), "severity", severity);
+        String analysis = llmService.analyzeClusterHealth(ctx.toString());
+        if (analysis == null || analysis.isBlank()) analysis = ruleBasedClusterSummary(nodes, faults, anyHigh);
+
+        String severity = faults > 0 ? "critical" : (anyHigh ? "warning" : "ok");
+        return Map.of("status", "success", "analysis", analysis, "severity", severity);
+    }
+
+    /** LLM 미설정/실패 시 규칙 기반 요약(빈약하지 않게 노드별 상태와 권장 조치를 채운다). */
+    private String ruleBasedClusterSummary(List<Node> nodes, long faults, boolean anyHigh) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("[종합 상태] ");
+        if (faults > 0)      sb.append("위험 — 장애 노드 ").append(faults).append("개 감지됨.\n");
+        else if (anyHigh)    sb.append("주의 — 자원 사용률이 높은 노드가 있습니다.\n");
+        else                 sb.append("정상 — 장애 노드 없음, 자원 여유 있음.\n");
+        sb.append("[노드별 관찰]\n");
+        for (Node n : nodes) {
+            MetricsPushRequest m = metricsCache.get(n.getId()).orElse(null);
+            sb.append("- ").append(n.getHostname()).append(" (").append(n.getRole()).append("): ");
+            sb.append(m == null ? "메트릭 수신 없음(무응답 추정)"
+                    : String.format("CPU %.0f%% / MEM %.0f%% / DISK %.0f%%",
+                        m.getCpuPercent(), m.getMemoryPercent(), m.getDiskPercent()));
+            sb.append("\n");
+        }
+        sb.append("[근본 원인 / 위험 요인] ");
+        sb.append(faults > 0 ? "장애 노드의 heartbeat 미수신 — 전원/네트워크/에이전트 점검 필요.\n"
+                : anyHigh ? "자원 임계 근접 — 부하 원인 프로세스 확인 권장.\n" : "특이사항 없음.\n");
+        sb.append("[권장 조치]\n");
+        if (faults > 0) {
+            sb.append("1. 장애 노드의 전원·네트워크·에이전트 상태를 확인하세요.\n");
+            sb.append("2. 복구가 어려우면 Standby로 수동 전환(Failover)을 검토하세요.\n");
+            sb.append("3. 복구 후 동기화 상태와 VIP 위치를 확인하세요.\n");
+        } else if (anyHigh) {
+            sb.append("1. 자원 사용률이 높은 노드에서 상위 프로세스를 확인하세요(Runbook Health Check).\n");
+            sb.append("2. 필요 시 서비스 재시작 또는 부하 분산을 검토하세요.\n");
+        } else {
+            sb.append("1. 추가 조치 불필요. 정기 점검을 유지하세요.\n");
+        }
+        sb.append("(참고: LLM 미설정/응답 불가로 규칙 기반 요약을 제공했습니다. 시스템 설정에서 분석 모델을 지정하면 상세 분석이 가능합니다.)");
+        return sb.toString();
     }
 
     private boolean isCooldownActive(UUID nodeId) {

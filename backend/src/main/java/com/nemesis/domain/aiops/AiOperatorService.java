@@ -42,11 +42,16 @@ public class AiOperatorService {
         InvestigateResponse r = client.investigate(ctx, sshTarget(node));
         if (r == null) { log.info("aibot 조사 불가 → 제안 생략"); return null; }   // 폴백
 
+        // SP6: 사이드카 자기신고를 신뢰하지 않고 서버에서 위험도/신뢰도/조사차단 재판정.
+        ProposalGuardrails.Verdict v =
+                ProposalGuardrails.evaluate(r.proposedActions(), r.diagnosis(), r.rootCause(), r.confidence());
         AiProposal p = AiProposal.builder()
                 .id(UUID.randomUUID()).clusterId(clusterId).nodeId(nodeId)
                 .triggerType(triggerType).triggerReason(reason)
-                .diagnosis(r.diagnosis()).rootCause(r.rootCause()).confidence(r.confidence())
-                .proposedActions(toJson(r.proposedActions()))
+                .diagnosis(r.diagnosis()).rootCause(r.rootCause()).confidence(v.confidence())
+                .proposedActions(toJson(v.actions()))
+                .maxRiskLevel(v.maxRiskLevel()).requiresManual(v.requiresManual())
+                .blocked(v.blocked()).blockedReason(v.blockedReason())
                 .status(AiProposal.PENDING)
                 .expiresAt(OffsetDateTime.now().plusMinutes(props.getProposalTtlMinutes()))
                 .build();
@@ -78,11 +83,16 @@ public class AiOperatorService {
     /** SP3: 능동 모니터링 finding의 심각 조치를 PENDING 제안으로 생성. */
     @Transactional
     public AiProposal createFindingProposal(UUID clusterId, UUID nodeId, String triggerReason, ScanFinding f) {
+        // SP6: 모니터링 finding → 제안 전환 시에도 동일 가드레일 적용.
+        ProposalGuardrails.Verdict v =
+                ProposalGuardrails.evaluate(f.proposedActions(), f.diagnosis(), f.rootCause(), f.confidence());
         AiProposal p = AiProposal.builder()
                 .id(UUID.randomUUID()).clusterId(clusterId).nodeId(nodeId)
                 .triggerType("MONITOR").triggerReason(triggerReason)
-                .diagnosis(f.diagnosis()).rootCause(f.rootCause()).confidence(f.confidence())
-                .proposedActions(toJson(f.proposedActions()))
+                .diagnosis(f.diagnosis()).rootCause(f.rootCause()).confidence(v.confidence())
+                .proposedActions(toJson(v.actions()))
+                .maxRiskLevel(v.maxRiskLevel()).requiresManual(v.requiresManual())
+                .blocked(v.blocked()).blockedReason(v.blockedReason())
                 .status(AiProposal.PENDING)
                 .expiresAt(OffsetDateTime.now().plusMinutes(props.getProposalTtlMinutes()))
                 .build();

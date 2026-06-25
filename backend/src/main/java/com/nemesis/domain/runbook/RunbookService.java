@@ -45,6 +45,14 @@ public class RunbookService {
     }
 
     @Transactional
+    public void delete(Long id) {
+        if (!runbookRepository.existsById(id)) {
+            throw new IllegalArgumentException("Runbook not found: " + id);
+        }
+        runbookRepository.deleteById(id);
+    }
+
+    @Transactional
     public Map<String, Object> advanceStep(Long id, int targetStep) {
         Runbook rb = runbookRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Runbook not found: " + id));
