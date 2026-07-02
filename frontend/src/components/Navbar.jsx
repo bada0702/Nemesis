@@ -6,6 +6,7 @@ import { getAiNotifications } from '../api/client'
 
 const PAGE_TITLES = {
   '/':                     { title: '대시보드',      sub: '전체 시스템의 상태를 한눈에 확인합니다.' },
+  '/ai':                   { title: 'AI 운영',       sub: 'AI 이상 징후·장애 예측·조치 승인을 관리합니다.' },
   '/help':                 { title: '도움말',        sub: 'NEMESIS 사용 방법과 주요 기능 안내.' },
   '/clusters/tree':        { title: '트리 뷰',       sub: '클러스터 구성을 트리 형태로 확인합니다.' },
   '/ha/groups':            { title: '클러스터 목록', sub: '등록된 HA 클러스터를 관리합니다.' },
@@ -15,14 +16,15 @@ const PAGE_TITLES = {
   '/services?type=DB':     { title: 'DB',            sub: '데이터베이스 서비스 상태를 확인합니다.' },
   '/services?type=APP':    { title: 'Application',   sub: '애플리케이션 서비스 상태를 확인합니다.' },
   '/docker/containers':    { title: '컨테이너',      sub: '컨테이너 실행 상태를 확인합니다.' },
+  '/docker/images':        { title: '이미지',        sub: 'Docker 이미지 현황을 확인합니다.' },
   '/inspection':           { title: '점검 관리',     sub: '정기 점검 일정을 관리합니다.' },
-  '/monitoring/cluster':   { title: '클러스터 상태', sub: '복제·하트비트·에이전트 상태를 통합 확인합니다.' },
   '/reports':              { title: '리포트',        sub: '장애·Failover 이력 및 가동률 통계를 조회합니다.' },
   '/settings/system':      { title: '시스템 설정',   sub: 'Nemesis 환경설정 및 시스템 정보를 관리합니다.' },
+  '/settings/agents':      { title: '에이전트 관리', sub: '노드 에이전트 상태를 관리합니다.' },
+  '/settings/agents/install': { title: '에이전트 설치', sub: 'SSH로 대상 서버에 Nemesis 에이전트를 원격 설치합니다.' },
   '/alerts':               { title: '알람 현황',     sub: '발생한 알람 목록을 확인합니다.' },
   '/alerts/config':        { title: '알람 설정',     sub: '알람 규칙을 설정합니다.' },
-  '/servers/list':         { title: '노드 현황',     sub: '등록된 노드의 상태를 확인합니다.' },
-  '/ai-analysis':          { title: 'AI 장애 분석',  sub: 'AI가 에러 로그를 분석하고 수정 명령어를 제안합니다.' },
+  '/servers/list':         { title: '서버 현황',     sub: '전체 노드 목록 및 리소스 상태를 확인합니다.' },
 }
 
 const DAY_KO = ['일', '월', '화', '수', '목', '금', '토']
