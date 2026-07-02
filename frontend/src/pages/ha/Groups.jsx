@@ -263,7 +263,7 @@ export default function HaGroups() {
     <div className="p-8 pt-0 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-bold text-white">이중화(HA) 그룹 목록</h2>
+          <h2 className="text-xl font-bold text-white">클러스터 목록</h2>
           <p className="text-xs text-gray-500 mt-1">Active/Standby 클러스터 쌍 현황</p>
         </div>
         <button onClick={load} className="flex items-center gap-2 text-xs text-gray-400 hover:text-white px-3 py-2 rounded-lg border border-gray-700">

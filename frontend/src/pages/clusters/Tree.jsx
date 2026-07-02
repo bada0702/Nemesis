@@ -279,9 +279,9 @@ export default function ClusterTree() {
       {/* 헤더 */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-xl font-black text-slate-100 tracking-tight italic uppercase flex items-center gap-3">
+          <h1 className="text-xl font-black text-slate-100 tracking-tight flex items-center gap-3">
             <span className="material-symbols-outlined text-sky-400 text-[24px]">account_tree</span>
-            Cluster Tree
+            트리 뷰
           </h1>
           <p className="text-[11px] text-slate-500 mt-0.5 font-mono ml-9">
             Cluster → Node → 보호 대상 서비스 · Agent
