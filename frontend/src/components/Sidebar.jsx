@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, GitBranch, Shield, Zap,
@@ -39,7 +39,6 @@ const MENU = [
 function MenuItem({ item, collapsed }) {
   const location = useLocation()
   const navigate  = useNavigate()
-  const [open, setOpen] = useState(false)
   const Icon = item.icon
 
   // 쿼리스트링 포함 비교 (예: /services?type=DB)
@@ -49,6 +48,10 @@ function MenuItem({ item, collapsed }) {
   const isActive = item.path
     ? matches(item.path)
     : item.children?.some(c => matches(c.path))
+
+  // 활성 하위 페이지가 있는 그룹은 처음부터 펼치고, 이동으로 활성화되면 따라 펼친다
+  const [open, setOpen] = useState(isActive)
+  useEffect(() => { if (isActive) setOpen(true) }, [isActive])
 
   if (item.children) {
     if (collapsed) {
@@ -67,7 +70,8 @@ function MenuItem({ item, collapsed }) {
       <div>
         <button
           onClick={() => setOpen(o => !o)}
-          className="w-full flex items-center justify-between px-3 py-3 text-sm font-medium text-gray-400 hover:bg-gray-800 hover:text-white rounded-lg"
+          className={`w-full flex items-center justify-between px-3 py-3 text-sm font-medium rounded-lg
+            ${isActive ? 'text-white bg-gray-800/60' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}
         >
           <div className="flex items-center">
             <Icon className="w-5 h-5 mr-3" aria-hidden="true" />
