@@ -14,6 +14,8 @@ const MENU = [
 
   { label: '클러스터', icon: GitBranch, path: null, children: [
     { label: '클러스터 목록', path: '/ha/groups'         },
+    { label: '서버 현황',    path: '/servers/list'       },
+    { label: '트리 뷰',      path: '/clusters/tree'      },
     { label: '클러스터 설정', path: '/settings/clusters' },
     { label: 'HA 운영 절차', path: '/ha/sequence'       },
   ]},
@@ -26,6 +28,7 @@ const MENU = [
   ]},
 
   { label: '운영', icon: Zap, path: null, children: [
+    { label: '알람 현황', path: '/alerts'     },
     { label: '점검 관리', path: '/inspection' },
     { label: '리포트',    path: '/reports'    },
   ]},
