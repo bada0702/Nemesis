@@ -1,0 +1,10 @@
+venv/
+__pycache__/
+*.pyc
+logs/
+data/
+*.log
+.env
+credentials.json
+token_google.json
+*.bak

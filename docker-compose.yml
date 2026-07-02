@@ -15,8 +15,32 @@ services:
         condition: service_healthy
     env_file:
       - .env
+    # 호스트의 Ollama(11434)에 host.docker.internal 로 도달.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     networks:
       - nemesis-net
+
+  nemesis-server-02:
+    image: nemesis-server:latest
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "${NEMESIS_API_PORT_02:-18081}:18080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - .env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - nemesis-net
+
+  # AI 사이드카(/ai/* — 채팅·진단)는 docker-compose로 관리하지 않음.
+  # 실제 운영은 systemd nemesis-sidecar.service(/opt/nemesis-bot, 포트 18900, host.docker.internal 경유
+  # 또는 도커 브릿지 게이트웨이로 백엔드가 호출)로 별도 기동한다. 상세: docs 또는 NEMESIS_AIBOT_URL 참고.
 
   nemesis-frontend:
     image: nginx:alpine
