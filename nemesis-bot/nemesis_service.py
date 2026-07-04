@@ -135,8 +135,14 @@ def chat(body: dict, _: bool = Depends(require_token)):
     message = (body.get("message") or "").strip()
     if not message:
         raise HTTPException(status_code=400, detail="message 비어있음")
-    agent = get_agent()
-    reply = asyncio.run(agent.run(message, user_id=0, chat_id=0))
+    # 요청자(operator) 토큰을 운영 도구(페일오버 등)가 그대로 사용하도록 컨텍스트에 설정.
+    import nemesis_ops_tools as ops
+    ops.set_nemesis_auth(body.get("userToken"))
+    try:
+        agent = get_agent()
+        reply = asyncio.run(agent.run(message, user_id=0, chat_id=0))
+    finally:
+        ops.set_nemesis_auth(None)   # 요청 종료 시 토큰 잔류 방지
     return {"reply": reply, "proposalId": None}
 
 

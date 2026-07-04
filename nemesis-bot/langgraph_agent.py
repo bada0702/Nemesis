@@ -49,6 +49,25 @@ def _is_error_content(content: str) -> bool:
     return str(content).lstrip().startswith("❌")
 
 
+def _content_to_text(content) -> str:
+    """AIMessage.content를 사용자에게 보낼 순수 텍스트로 변환.
+
+    Gemini 등은 content를 [{'type':'text','text':...,'extras':{'signature':...}}, ...]
+    형태의 블록 리스트로 반환하므로, str()로 캐스팅하면 딕셔너리 원문이
+    그대로 텔레그램에 노출된다. 텍스트 블록만 추려서 이어붙인다."""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts = []
+        for block in content:
+            if isinstance(block, str):
+                parts.append(block)
+            elif isinstance(block, dict) and block.get("type") == "text":
+                parts.append(block.get("text", ""))
+        return "\n".join(p for p in parts if p).strip()
+    return str(content)
+
+
 class AgentState(TypedDict):
     messages: Annotated[list[BaseMessage], operator.add]
     user_id: int
@@ -138,8 +157,17 @@ class LangGraphAgent:
         if len(messages) <= self.COMPRESS_THRESHOLD and total_len <= self.COMPRESS_LENGTH_THRESHOLD:
             return messages
 
-        to_compress = messages[:-self.COMPRESS_PROTECT_LAST]
-        keep_end = messages[-self.COMPRESS_PROTECT_LAST:]
+        # 자르는 지점이 도구 호출/응답 턴 중간에 떨어지면 Gemini 등이 대화를 거부한다
+        # (함수 호출 턴은 반드시 user 턴이나 함수 응답 턴 바로 뒤에 와야 함).
+        # HumanMessage 경계까지 되돌려서 유지 구간이 항상 user 턴으로 시작하게 한다.
+        split = len(messages) - self.COMPRESS_PROTECT_LAST
+        while split > 0 and not isinstance(messages[split], HumanMessage):
+            split -= 1
+
+        to_compress = messages[:split]
+        keep_end = messages[split:]
+        if not to_compress:
+            return messages  # 안전한 경계를 찾지 못함 → 이번 턴은 압축 건너뜀
 
         lines = []
         for m in to_compress:
@@ -468,6 +496,7 @@ class LangGraphAgent:
 8. "만들겠습니다", "수정하겠습니다" 같은 약속 = 즉시 도구 호출로 이행. 계획 설명 후 멈추는 것 금지.
 9. **"응", "해", "ㅇ", "해봐", "그렇게 해", "수정해" = 직전 대화에서 논의된 작업을 지금 즉시 도구 호출로 실행. 재확인·설명 금지.**
 10. **"주인님께서 직접 하셔야", "터미널에서 실행하셔야" 같은 우회는 절대 금지.** 프로그래밍으로 해결 가능한 모든 작업은 비서가 직접 도구로 실행합니다. 방법을 못 찾겠으면 run_shell_command로 시도합니다.
+11. **[Nemesis HA 운영]** 클러스터 상태 조회는 `nemesis_state`, 사용자가 "수동 페일오버", "역할 전환", "failover" 등을 지시하면 **즉시 `nemesis_failover(cluster=클러스터명)` 도구를 호출**하십시오(설명만 하고 멈추지 말 것). 도구 결과(✅/❌)를 그대로 보고하십시오. 페일오버는 operator 권한 토큰이 있어야 실행됩니다.
 
 **[자율 문제 해결 및 자가 교정 — 핵심 원칙]**
 비서는 "모르겠습니다"를 먼저 말하지 않습니다. 반드시 아래 순서로 스스로 해결을 시도합니다:
@@ -664,8 +693,9 @@ class LangGraphAgent:
         final_text = ""
         for msg in reversed(final_state["messages"]):
             if isinstance(msg, AIMessage) and msg.content:
-                final_text = msg.content if isinstance(msg.content, str) else str(msg.content)
-                break
+                final_text = _content_to_text(msg.content)
+                if final_text:
+                    break
 
         # 정상 종료 시 마지막 메시지는 항상 텍스트 답변이며(_should_continue가 도구
         # 호출 AIMessage 상태로는 END하지 않고, MAX_TURNS에서는 force_final_answer가
@@ -699,7 +729,14 @@ class LangGraphAgent:
             "절대 변경을 시도하지 마십시오. 조사가 끝나면 마지막 메시지에 아래 JSON만 출력하십시오:\n"
             '{"diagnosis":"...","rootCause":"...","proposedActions":'
             '[{"description":"...","command":"...","target":"<hostname>","riskLevel":"LOW|MEDIUM|HIGH"}],'
-            '"confidence":0.0~1.0}'
+            '"confidence":0.0~1.0}\n'
+            "규칙:\n"
+            "- diagnosis, rootCause, 각 조치의 description 은 반드시 한국어로 작성하십시오. "
+            "JSON 키 이름과 command(셸 명령)는 원문 그대로 두십시오.\n"
+            "- 근본 원인을 도구로 실제 특정하지 못했다면 rootCause 를 비워두고 confidence 를 0.4 이하로 두십시오. "
+            "원인 미특정 상태에서 높은 confidence 를 주지 마십시오.\n"
+            "- 인증키 생성·복구·교체(.ssh, id_rsa, authorized_keys 등), sudo/권한 변경, "
+            "서비스 재시작/중지, 재부팅은 riskLevel 을 HIGH 로 표기하십시오."
         )
         msg = "장애 컨텍스트: " + _json.dumps(context, ensure_ascii=False)
         from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
@@ -710,8 +747,9 @@ class LangGraphAgent:
         text = ""
         for m in reversed(final["messages"]):
             if isinstance(m, AIMessage) and m.content:
-                text = m.content if isinstance(m.content, str) else str(m.content)
-                break
+                text = _content_to_text(m.content)
+                if text:
+                    break
         return self._parse_plan(text, context)
 
     @staticmethod

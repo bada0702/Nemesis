@@ -9,6 +9,9 @@ from datetime import datetime
 from typing import Optional
 from langchain_core.tools import tool
 
+# Nemesis HA 운영 도구(채팅 에이전트 전용): 상태 조회 + 수동 페일오버
+from nemesis_ops_tools import nemesis_state, nemesis_failover
+
 logger = logging.getLogger(__name__)
 
 
@@ -1789,6 +1792,9 @@ ALL_TOOLS = [
     kis_buy_stock,
     kis_sell_stock,
     kis_get_stock_price,
+    # Nemesis HA 운영(상태 조회 + 수동 페일오버)
+    nemesis_state,
+    nemesis_failover,
 ]
 
 # ── 메시징 도구 ─────────────────────────────────────────────────────────

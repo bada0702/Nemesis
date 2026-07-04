@@ -81,14 +81,74 @@ def remote_diagnose() -> str:
                  "echo '== disk =='; df -h; echo '== mem =='; free -m")
 
 
+# 채팅 요청자(operator)의 토큰을 도구가 Nemesis 제어 API 호출 시 그대로 사용한다(RBAC 유지).
+_auth = {"token": None}
+
+
+def set_nemesis_auth(token):
+    _auth["token"] = token
+
+
+def _auth_headers():
+    t = _auth.get("token")
+    return {"Authorization": f"Bearer {t}"} if t else {}
+
+
 @tool
 def nemesis_state(path: str = "/api/clusters") -> str:
     """Nemesis 백엔드의 읽기 API를 조회한다(예: /api/clusters)."""
     try:
-        r = httpx.get(NEMESIS_API_URL + path, timeout=10)
+        r = httpx.get(NEMESIS_API_URL + path, headers=_auth_headers(), timeout=10)
         return r.text[:8000]
     except Exception as e:
         return f"❌ Nemesis 조회 실패: {e}"
+
+
+@tool
+def nemesis_failover(cluster: str = "") -> str:
+    """Nemesis 클러스터에 수동 페일오버(역할 전환: 현재 PRIMARY→STANDBY 승격)를 즉시 실행한다.
+    cluster=클러스터명 또는 ID(생략 시 클러스터가 하나뿐이면 그것). 강등/승격 노드는 백엔드가 자동 선택한다.
+    operator 이상 권한이 필요하며, 사용자가 채팅에서 명시적으로 페일오버를 지시했을 때만 호출하라."""
+    try:
+        clusters = httpx.get(NEMESIS_API_URL + "/api/clusters",
+                             headers=_auth_headers(), timeout=10).json()
+    except Exception as e:
+        return f"❌ 클러스터 조회 실패: {e}"
+    if not clusters:
+        return "❌ 등록된 클러스터가 없습니다."
+
+    key = (cluster or "").strip().lower()
+    target = None
+    if key:
+        for c in clusters:
+            cid = str(c.get("id", "")).lower()
+            name = str(c.get("name", "")).lower()
+            if key == cid or key == name or (key in name):
+                target = c
+                break
+    elif len(clusters) == 1:
+        target = clusters[0]
+
+    if target is None:
+        names = ", ".join(str(c.get("name") or c.get("id")) for c in clusters)
+        return f"❌ 클러스터 '{cluster}'를 찾지 못했습니다. 사용 가능: {names}"
+
+    cid, cname = target.get("id"), target.get("name")
+    try:
+        r = httpx.post(f"{NEMESIS_API_URL}/api/clusters/{cid}/failover",
+                       json={}, headers=_auth_headers(), timeout=60)
+    except Exception as e:
+        return f"❌ 페일오버 호출 실패: {e}"
+    if r.status_code == 401:
+        return "❌ 인증 실패(토큰 없음/만료). 페일오버는 operator 이상 권한이 필요합니다."
+    if r.status_code == 403:
+        return "❌ 권한 부족: 페일오버는 operator 이상만 실행할 수 있습니다."
+    if r.status_code >= 400:
+        return f"❌ 페일오버 실패(HTTP {r.status_code}): {r.text[:300]}"
+    d = r.json() if r.text else {}
+    if d.get("success") is False:
+        return f"⚠️ 페일오버 보류/불가 ({d.get('status')}): {d.get('message')}"
+    return f"✅ '{cname}' 수동 페일오버 완료. 새 Primary = {d.get('newPrimary')} ({d.get('status')})"
 
 
 READ_TOOLS = [remote_tail_log, remote_read_file, remote_diagnose, nemesis_state]
