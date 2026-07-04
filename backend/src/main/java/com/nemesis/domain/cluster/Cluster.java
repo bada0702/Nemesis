@@ -53,6 +53,11 @@ public class Cluster {
     @Builder.Default
     private boolean aiEnabled = false;
 
+    /** 페일오버 전 구 active 격리 방식: ssh-soft(에이전트 self-fence) | none (V20) */
+    @Column(name = "fence_method", length = 20)
+    @Builder.Default
+    private String fenceMethod = "ssh-soft";
+
     @Column(name = "created_at", updatable = false)
     private OffsetDateTime createdAt;
 

@@ -1,6 +1,8 @@
 package com.nemesis.detection;
 
 import com.nemesis.cache.MetricsCacheService;
+import com.nemesis.domain.catalog.ManagedService;
+import com.nemesis.domain.catalog.ManagedServiceRepository;
 import com.nemesis.domain.cluster.Cluster;
 import com.nemesis.domain.event.DetectionEvent;
 import com.nemesis.domain.event.DetectionEventRepository;
@@ -40,12 +42,19 @@ public class HealthMonitorService {
     private final DetectionEventRepository eventRepository;
     private final DetectionProperties      props;
     private final ApplicationEventPublisher eventPublisher;
+    private final ManagedServiceRepository  managedServiceRepository;
 
     /** 노드별 현재 발효 중인 자원 알람(중복 발생 방지). */
     private final Map<UUID, Set<DetectionEvent.Type>> activeAlerts = new HashMap<>();
 
     /** 노드별 직전 스캔에서 실행 중이던 프로세스 이름 집합. */
     private final Map<UUID, Set<String>> lastRunningProcs = new HashMap<>();
+
+    /** active 노드의 HA 서비스 프로세스 최초 소실 시각(ms). key = nodeId:패턴 */
+    private final Map<String, Long> haMissingSince = new HashMap<>();
+
+    /** 이번 소실 인시던트에 대해 이미 발화(페일오버/보류 경보)했는지. key = nodeId:패턴 */
+    private final Set<String> haMissingFired = new HashSet<>();
 
     @Scheduled(fixedDelayString = "${nemesis.detection.scan-interval-ms:1000}")
     @Transactional
@@ -177,6 +186,96 @@ public class HealthMonitorService {
                 m.getDiskPercent(), props.getDiskThreshold(), "Disk");
 
         checkProcessDown(node, m);
+        checkHaServiceFailover(node, m);
+    }
+
+    /**
+     * active 노드에서 haManaged 서비스 프로세스가 유예시간 이상 사라지면 자동 페일오버를
+     * 트리거한다(인시던트당 1회). 임의 프로세스 소실(checkProcessDown, WARNING)과 달리
+     * 운영자가 HA 대상으로 명시한 서비스만 대상이며, 서비스가 실행 중인 standby가 없으면
+     * 승격해도 서비스 공백이라 트리거하지 않고 CRITICAL 경보만 남긴다.
+     */
+    private void checkHaServiceFailover(Node node, MetricsPushRequest m) {
+        if (!props.isProcessFailoverEnabled()) return;
+        if (node.getRole() != Node.Role.active) { clearHaState(node.getId()); return; }
+        if (m.getProcesses() == null) return;   // 프로세스 미보고 → 판정 불가(오탐 방지)
+
+        List<ManagedService> haServices =
+                managedServiceRepository.findByClusterIdAndHaManagedTrue(node.getCluster().getId());
+        if (haServices.isEmpty()) return;
+
+        Set<String> running = processNames(m);
+        long now = System.currentTimeMillis();
+
+        for (ManagedService svc : haServices) {
+            String pattern = svc.getName();
+            String key = node.getId() + ":" + pattern;
+
+            if (matches(running, pattern)) {   // 프로세스 복귀 → 인시던트 종료, 다음엔 유예부터
+                haMissingSince.remove(key);
+                haMissingFired.remove(key);
+                continue;
+            }
+
+            long since = haMissingSince.computeIfAbsent(key, k -> now);
+            if (now - since < props.getProcessFailoverGraceSeconds() * 1000L) continue;
+            if (!haMissingFired.add(key)) continue;   // 인시던트당 1회만 발화
+
+            Node target = findStandbyRunning(node, pattern);
+            if (target == null) {
+                record(node, DetectionEvent.Type.PROCESS_DOWN, DetectionEvent.Severity.CRITICAL,
+                        node.getHostname() + " HA 서비스 '" + svc.getDisplayName()
+                                + "' 프로세스 다운 — 서비스 실행 중인 standby 없음 (페일오버 보류)",
+                        "패턴 " + pattern + ", 소실 " + ((now - since) / 1000) + "초");
+                log.warn("HA 서비스 다운이나 페일오버 대상 없음: {} / {} on {}",
+                        svc.getDisplayName(), pattern, node.getHostname());
+                continue;
+            }
+
+            String reason = "HA 서비스 프로세스 다운: " + svc.getDisplayName()
+                    + " (" + pattern + ", " + ((now - since) / 1000) + "초 지속)";
+            record(node, DetectionEvent.Type.PROCESS_DOWN, DetectionEvent.Severity.CRITICAL,
+                    node.getHostname() + " HA 서비스 '" + svc.getDisplayName()
+                            + "' 프로세스 다운 → 자동 페일오버 트리거",
+                    "패턴 " + pattern + ", 대상 " + target.getHostname());
+            log.warn("HA 서비스 다운 페일오버 트리거: {} on {} → {}",
+                    svc.getDisplayName(), node.getHostname(), target.getHostname());
+            eventPublisher.publishEvent(new NodeFaultEvent(
+                    node.getCluster().getId(), node.getId(), node.getHostname(), reason));
+        }
+    }
+
+    /** 같은 클러스터에서 [standby + 신선 메트릭 + 해당 서비스 프로세스 실행 중]인 노드. */
+    private Node findStandbyRunning(Node active, String pattern) {
+        for (Node n : nodeRepository.findByClusterId(active.getCluster().getId())) {
+            if (n.getId().equals(active.getId()) || n.getRole() != Node.Role.standby) continue;
+            Optional<MetricsPushRequest> m = metricsCache.getFresh(n.getId(), props.metricsFreshMillis());
+            if (m.isPresent() && m.get().getProcesses() != null
+                    && matches(processNames(m.get()), pattern)) {
+                return n;
+            }
+        }
+        return null;
+    }
+
+    /** 프로세스명 소문자 집합 (ServiceCatalogService.instanceState와 동일 매칭 규칙). */
+    private static Set<String> processNames(MetricsPushRequest m) {
+        Set<String> names = new HashSet<>();
+        for (Map<String, String> p : m.getProcesses()) {
+            String name = p.get("name");
+            if (name != null) names.add(name.toLowerCase());
+        }
+        return names;
+    }
+
+    private static boolean matches(Set<String> names, String pattern) {
+        return names.stream().anyMatch(n -> n.contains(pattern));
+    }
+
+    private void clearHaState(UUID nodeId) {
+        String prefix = nodeId + ":";
+        haMissingSince.keySet().removeIf(k -> k.startsWith(prefix));
+        haMissingFired.removeIf(k -> k.startsWith(prefix));
     }
 
     private void checkThreshold(Node node, Set<DetectionEvent.Type> active,
@@ -230,5 +329,6 @@ public class HealthMonitorService {
     private void clearNodeState(UUID nodeId) {
         activeAlerts.remove(nodeId);
         lastRunningProcs.remove(nodeId);
+        clearHaState(nodeId);
     }
 }

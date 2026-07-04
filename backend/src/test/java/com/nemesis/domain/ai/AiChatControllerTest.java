@@ -15,9 +15,9 @@ class AiChatControllerTest {
         AiOperatorClient aibot = mock(AiOperatorClient.class);
         LlmService llm = mock(LlmService.class);
         when(aibot.health()).thenReturn(true);
-        when(aibot.chat("상태?")).thenReturn("aibot 응답");
+        when(aibot.chat("상태?", null)).thenReturn("aibot 응답");
         AiChatController c = new AiChatController(llm, aibot);
-        var resp = c.chat(Map.of("message", "상태?"));
+        var resp = c.chat(Map.of("message", "상태?"), null);
         assertThat(resp.getBody().get("reply")).isEqualTo("aibot 응답");
         verifyNoInteractions(llm);
     }
@@ -30,7 +30,7 @@ class AiChatControllerTest {
         when(llm.isAvailable()).thenReturn(true);
         when(llm.chat(anyString(), eq("상태?"))).thenReturn("llm 응답");
         AiChatController c = new AiChatController(llm, aibot);
-        var resp = c.chat(Map.of("message", "상태?"));
+        var resp = c.chat(Map.of("message", "상태?"), null);
         assertThat(resp.getBody().get("reply")).isEqualTo("llm 응답");
     }
 }

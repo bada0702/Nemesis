@@ -32,6 +32,12 @@ public class DetectionProperties {
     /** 디스크 사용률 경고 임계(%) */
     private double diskThreshold = 90.0;
 
+    /** active 노드의 haManaged 서비스 프로세스 다운 시 자동 페일오버 여부 */
+    private boolean processFailoverEnabled = true;
+
+    /** 프로세스 소실이 이 시간(초) 이상 지속돼야 페일오버 트리거(일시 재시작 오탐 방지) */
+    private int processFailoverGraceSeconds = 10;
+
     /**
      * 클러스터의 heartbeat_fail_threshold(연속 미응답 횟수)와 push 주기로
      * Fault 판정까지의 staleness 임계(ms)를 계산한다.

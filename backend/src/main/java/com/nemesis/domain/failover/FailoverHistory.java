@@ -14,7 +14,7 @@ import java.util.UUID;
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 public class FailoverHistory {
 
-    public enum Trigger { MANUAL, DETECTION, AI }
+    public enum Trigger { MANUAL, DETECTION, AI, FAILBACK }
     public enum Status  { SUCCESS, FAILED, SKIPPED }
 
     @Id
