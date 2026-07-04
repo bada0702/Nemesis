@@ -10,7 +10,10 @@ import { LogoMark, LogoFull } from './Logo'
 const MENU = [
   { label: '대시보드', icon: LayoutDashboard, path: '/' },
 
-  { label: 'AI 운영', icon: Bot, path: '/ai' },
+  { label: 'AI 운영', icon: Bot, path: null, children: [
+    { label: 'AI 운영 센터',  path: '/ai'          },
+    { label: 'AI 장애 분석', path: '/ai/analysis' },
+  ]},
 
   { label: '클러스터', icon: GitBranch, path: null, children: [
     { label: '클러스터 목록', path: '/ha/groups'         },

@@ -27,6 +27,7 @@ import Topology          from './pages/Topology'
 import AlertCenter       from './pages/AlertCenter'
 import AuditLog          from './pages/AuditLog'
 import AiOpsCenter       from './pages/AiOpsCenter'
+import AiAnalysis        from './pages/AiAnalysis'
 import Help              from './pages/Help'
 
 import ClusterStatus     from './pages/monitoring/ClusterStatus'
@@ -95,7 +96,8 @@ function Gate() {
           <Route path="/cluster/:id/alerts"    element={<AlertCenter />} />
           <Route path="/cluster/:id/audit"     element={<AuditLog />} />
           <Route path="/ai"                    element={<AiOpsCenter />} />
-          <Route path="/ai-analysis"           element={<Navigate to="/ai" replace />} />
+          <Route path="/ai/analysis"           element={<AiAnalysis />} />
+          <Route path="/ai-analysis"           element={<Navigate to="/ai/analysis" replace />} />
           <Route path="/help"                  element={<Help />} />
         </Routes>
       </Layout>

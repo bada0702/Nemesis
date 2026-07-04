@@ -6,7 +6,8 @@ import { getAiNotifications } from '../api/client'
 
 const PAGE_TITLES = {
   '/':                     { title: '대시보드',      sub: '전체 시스템의 상태를 한눈에 확인합니다.' },
-  '/ai':                   { title: 'AI 운영',       sub: 'AI 이상 징후·장애 예측·조치 승인을 관리합니다.' },
+  '/ai':                   { title: 'AI 운영 센터',  sub: 'AI 이상 징후·장애 예측·조치 승인을 관리합니다.' },
+  '/ai/analysis':          { title: 'AI 장애 분석',  sub: '에러 로그를 AI가 분석하고 수정 명령어를 제안합니다.' },
   '/help':                 { title: '도움말',        sub: 'NEMESIS 사용 방법과 주요 기능 안내.' },
   '/clusters/tree':        { title: '트리 뷰',       sub: '클러스터 구성을 트리 형태로 확인합니다.' },
   '/ha/groups':            { title: '클러스터 목록', sub: '등록된 HA 클러스터를 관리합니다.' },
