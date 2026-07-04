@@ -108,6 +108,22 @@ AI HOLD 게이트는 거치지 않는다(결정적 정책, 조건 자체가 보�
 - haManaged 서비스 미기동 → 호출 안 함
 - 핑퐁 가드 윈도 내 → 호출 안 함(시계는 유지)
 
+## Feature C: VIP 영속화 (VipReconciler) — 같은 날 추가
+
+**문제:** VIP는 `ip addr` 별칭이라 노드 재부팅·인터페이스 재기동 시 소실된다(7/2 재부팅 후
+VIP가 어디에도 없던 것을 실측). 페일오버 시점에만 VIP를 만지는 구조라 복원 주체가 없었다.
+
+**해결:** 신규 `domain/cluster/VipReconciler` — 60초 주기(`nemesis.vip.reconcile-interval-ms`,
+토글 `nemesis.vip.reconcile-enabled` 기본 true)로 드리프트를 점검·복원한다.
+- active 노드에 `vip-check` → 부재면 `VipService.apply()`(primary vip-up + 그 외 vip-down)
+- active 정상 보유 시 standby들의 잔재 VIP(스플릿브레인)만 개별 vip-down
+- 통신 실패는 상태 불명 → 무개입(오동작 방지), recovering 노드 존재 시(페일오버 중) 스킵
+- role은 절대 건드리지 않는다. vip-up이 멱등이라 이중 백엔드 동시 실행에도 안전.
+
+**운영 전제(호스트 조치):** 재부팅 시 스택이 살아야 복원 주체가 존재 →
+컨테이너 5종(postgres, server×2, frontend, bot-02)에 `--restart unless-stopped` 적용.
+(nemesis-agent/nemesis-sidecar는 이미 systemd enabled)
+
 ## 검증/배포
 
 - 단위 테스트: `docker run --rm -v "$PWD":/app -w /app gradle:8.7-jdk17-alpine gradle test --no-daemon --tests '...'`
