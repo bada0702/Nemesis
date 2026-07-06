@@ -62,10 +62,14 @@ def get_openrouter_api_key():
     return os.getenv("OPENROUTER_API_KEY", "")
 
 # Skills settings
+# gmail/crypto/stock/stock_trader/stock_recommendation 은 원본 텔레그램 봇(aibot)에서
+# 포크된 기능으로 Nemesis HA 콘솔의 장애 대응 용도와 무관하다(실거래 실행·메일 계정 접근
+# 포함). /ai/chat 에이전트의 도구 노출 범위를 줄이기 위해 기본값을 False 로 낮춘다 —
+# 필요 시 사이드카 .env 에서 명시적으로 opt-in 할 것.
 SKILLS_CONFIG = {
     "weather": os.getenv("SKILL_WEATHER_ENABLED", "True").lower() == "true",
     "news": os.getenv("SKILL_NEWS_ENABLED", "True").lower() == "true",
-    "stock": os.getenv("SKILL_STOCK_ENABLED", "True").lower() == "true",
+    "stock": os.getenv("SKILL_STOCK_ENABLED", "False").lower() == "true",
     "currency": os.getenv("SKILL_CURRENCY_ENABLED", "True").lower() == "true",
     "file": os.getenv("SKILL_FILE_ENABLED", "True").lower() == "true",
     "ftp": os.getenv("SKILL_FTP_ENABLED", "True").lower() == "true",
@@ -73,10 +77,11 @@ SKILLS_CONFIG = {
     "note": os.getenv("SKILL_NOTE_ENABLED", "True").lower() == "true",
     "task": os.getenv("SKILL_TASK_ENABLED", "True").lower() == "true",
     "server": os.getenv("SKILL_SERVER_ENABLED", "True").lower() == "true",
-    "stock_recommendation": os.getenv("SKILL_STOCK_RECOMMENDATION_ENABLED", "True").lower() == "true",
-    "gmail": os.getenv("SKILL_GMAIL_ENABLED", "True").lower() == "true",
-    "crypto": os.getenv("SKILL_CRYPTO_ENABLED", "True").lower() == "true",
+    "stock_recommendation": os.getenv("SKILL_STOCK_RECOMMENDATION_ENABLED", "False").lower() == "true",
+    "gmail": os.getenv("SKILL_GMAIL_ENABLED", "False").lower() == "true",
+    "crypto": os.getenv("SKILL_CRYPTO_ENABLED", "False").lower() == "true",
     "project": os.getenv("SKILL_PROJECT_ENABLED", "True").lower() == "true",
+    "stock_trader": os.getenv("SKILL_STOCK_TRADER_ENABLED", "False").lower() == "true",
 }
 
 # Telegram settings

@@ -69,7 +69,8 @@ class SkillsManager:
         self.flight_search = FlightSearchSkill()
         self.claude_coding = ClaudeCodingSkill()
         self.medical_knowledge = MedicalKnowledgeSkill()
-        self.stock_trader = StockTraderSkill()
+        # 실거래 실행 스킬 — Nemesis HA 콘솔 용도와 무관하므로 기본 비활성(opt-in).
+        self.stock_trader = StockTraderSkill() if SKILLS_CONFIG.get("stock_trader") else None
         self.trading_calc = TradingCalcSkill()
         self.autonomous_guardian = AutonomousGuardianSkill()
         enabled_list = [k for k, v in SKILLS_CONFIG.items() if v]

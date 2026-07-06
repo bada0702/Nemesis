@@ -670,7 +670,7 @@ def get_stock_recommendations() -> str:
 @tool
 def kis_get_balance() -> str:
     """한국투자증권 실계좌 잔고를 조회합니다. 예수금, 총평가금액, 보유종목 목록을 반환합니다."""
-    if not _skills or not hasattr(_skills, 'stock_trader'):
+    if not _skills or not getattr(_skills, 'stock_trader', None):
         return "❌ KIS 매매 스킬이 비활성화되어 있습니다."
     try:
         # 1. 기본 잔고 조회
@@ -691,7 +691,7 @@ def kis_buy_stock(symbol: str, quantity: int, price: str = "0") -> str:
     price: 매수 가격 (0 또는 생략 시 시장가)
     주의: 실제 돈이 사용됩니다. 신중하게 호출하세요.
     """
-    if not _skills or not hasattr(_skills, 'stock_trader'):
+    if not _skills or not getattr(_skills, 'stock_trader', None):
         return "❌ KIS 매매 스킬이 비활성화되어 있습니다."
     try:
         return _skills.stock_trader.buy_stock({"symbol": symbol, "quantity": quantity, "price": price})
@@ -707,7 +707,7 @@ def kis_sell_stock(symbol: str, quantity: int) -> str:
     quantity: 매도 수량
     주의: 실제 돈이 사용됩니다. 신중하게 호출하세요.
     """
-    if not _skills or not hasattr(_skills, 'stock_trader'):
+    if not _skills or not getattr(_skills, 'stock_trader', None):
         return "❌ KIS 매매 스킬이 비활성화되어 있습니다."
     try:
         return _skills.stock_trader.sell_stock({"symbol": symbol, "quantity": quantity})
@@ -721,7 +721,7 @@ def kis_get_stock_price(symbol: str) -> str:
     한국투자증권 API로 국내 주식 현재가를 실시간 조회합니다.
     symbol: 종목코드 6자리 (예: 005930=삼성전자, 247540=에코프로비엠)
     """
-    if not _skills or not hasattr(_skills, 'stock_trader'):
+    if not _skills or not getattr(_skills, 'stock_trader', None):
         return "❌ KIS 매매 스킬이 비활성화되어 있습니다."
     try:
         import json
