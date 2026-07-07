@@ -8,7 +8,8 @@ import java.time.OffsetDateTime;
 import java.util.UUID;
 
 @Entity
-@Table(name = "storage_devices")
+@Table(name = "storage_devices",
+       uniqueConstraints = @UniqueConstraint(columnNames = {"cluster_group_id", "wwid"}))
 @Getter
 @Setter
 @NoArgsConstructor
