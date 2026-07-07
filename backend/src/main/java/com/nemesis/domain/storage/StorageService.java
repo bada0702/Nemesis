@@ -1,14 +1,19 @@
 package com.nemesis.domain.storage;
 
 import com.nemesis.domain.agent.AgentCommandClient;
+import com.nemesis.domain.cluster.Cluster;
 import com.nemesis.domain.cluster.ClusterRepository;
+import com.nemesis.domain.node.Node;
 import com.nemesis.domain.node.NodeRepository;
+import com.nemesis.domain.storage.dto.StorageDtos.RegisterDeviceRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -25,6 +30,7 @@ public class StorageService {
 
     private static final Pattern SIZE_PATTERN =
             Pattern.compile("([0-9.]+)\\s*([KMGTP]?)B?", Pattern.CASE_INSENSITIVE);
+    private static final Pattern WWID_PATTERN = Pattern.compile("^[0-9a-fA-F]{8,64}$");
 
     public record DiscoveredDevice(String name, String wwid, Long sizeBytes,
                                     int pathCount, boolean alreadyRegistered) {}
@@ -65,5 +71,71 @@ public class StorageService {
 
     private int parseIntSafe(String s) {
         try { return Integer.parseInt(s); } catch (NumberFormatException e) { return 0; }
+    }
+
+    public List<StorageDevice> listDevices(UUID clusterId) {
+        return deviceRepository.findByClusterId(clusterId);
+    }
+
+    /** 지정 노드에서 FC 재스캔 후 디스크 목록을 조회한다(영속화하지 않음 — 등록 전 미리보기). */
+    public List<DiscoveredDevice> scan(UUID clusterId, UUID nodeId) {
+        clusterRepository.findById(clusterId)
+                .orElseThrow(() -> new IllegalArgumentException("cluster not found: " + clusterId));
+        Node node = nodeRepository.findByClusterId(clusterId).stream()
+                .filter(n -> n.getId().equals(nodeId)).findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("노드가 클러스터에 없습니다: " + nodeId));
+
+        AgentCommandClient.Result rescan = commandClient.execute(node, "storage.sh scan-fc");
+        if (!rescan.ok()) {
+            log.warn("FC 재스캔 실패(계속 진행, 기존 상태로 조회): {} - {}",
+                    node.getHostname(), rescan.error() != null ? rescan.error() : rescan.stderr());
+        }
+
+        AgentCommandClient.Result list = commandClient.execute(node, "storage.sh disk-list");
+        if (!list.ok()) {
+            throw new IllegalStateException("디스크 목록 조회 실패: " +
+                    (list.error() != null ? list.error() : list.stderr()));
+        }
+
+        List<String> registeredWwids = deviceRepository.findByClusterId(clusterId).stream()
+                .map(StorageDevice::getWwid).toList();
+        return parseDiskList(list.stdout()).stream()
+                .map(d -> new DiscoveredDevice(d.name(), d.wwid(), d.sizeBytes(), d.pathCount(),
+                        registeredWwids.contains(d.wwid())))
+                .toList();
+    }
+
+    @Transactional
+    public StorageDevice registerDevice(UUID clusterId, RegisterDeviceRequest req) {
+        Cluster cluster = clusterRepository.findById(clusterId)
+                .orElseThrow(() -> new IllegalArgumentException("cluster not found: " + clusterId));
+        String wwid = req.wwid() == null ? "" : req.wwid().trim();
+        if (!WWID_PATTERN.matcher(wwid).matches()) {
+            throw new IllegalStateException("올바르지 않은 WWID 형식입니다: " + req.wwid());
+        }
+        if (deviceRepository.findByClusterIdAndWwid(clusterId, wwid).isPresent()) {
+            throw new IllegalStateException("이미 등록된 WWID입니다: " + wwid);
+        }
+        StorageDevice device = StorageDevice.builder()
+                .cluster(cluster)
+                .wwid(wwid)
+                .label(req.label())
+                .sizeBytes(req.sizeBytes())
+                .pathCount(req.pathCount() == null ? 0 : req.pathCount())
+                .source(req.discoveredNodeId() != null ? StorageDevice.Source.SCAN : StorageDevice.Source.MANUAL)
+                .discoveredNodeId(req.discoveredNodeId())
+                .status(StorageDevice.Status.REGISTERED)
+                .build();
+        return deviceRepository.save(device);
+    }
+
+    @Transactional
+    public void deleteDevice(UUID clusterId, UUID deviceId) {
+        StorageDevice device = deviceRepository.findById(deviceId)
+                .orElseThrow(() -> new IllegalArgumentException("디바이스 없음: " + deviceId));
+        if (!device.getCluster().getId().equals(clusterId)) {
+            throw new IllegalArgumentException("디바이스가 해당 클러스터에 속하지 않습니다: " + deviceId);
+        }
+        deviceRepository.deleteById(deviceId);
     }
 }
