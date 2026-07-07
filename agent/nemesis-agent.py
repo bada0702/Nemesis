@@ -44,6 +44,7 @@ CONTROL_SCRIPT      = os.path.join(SCRIPT_DIR, 'control.sh')
 # 임의 명령 실행을 막아 Self-Healing/VIP 이동 같은 정의된 액션만 허용한다.
 ALLOWED_SCRIPTS = {
     'control.sh':              os.path.join(SCRIPT_DIR, 'control.sh'),
+    'storage.sh':              os.path.join(SCRIPT_DIR, 'storage.sh'),
     'healing/heal_oracle.sh':  os.path.join(HEALING_DIR, 'heal_oracle.sh'),
     'healing/heal_tomcat.sh':  os.path.join(HEALING_DIR, 'heal_tomcat.sh'),
     'healing/heal_nginx.sh':   os.path.join(HEALING_DIR, 'heal_nginx.sh'),

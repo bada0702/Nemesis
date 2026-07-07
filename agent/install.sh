@@ -21,6 +21,8 @@ chmod +x "$INSTALL_DIR/collect.sh"
 # HA 실행 스크립트(Phase D): VIP/GPFS/서비스 제어 + 레이어별 Self-Healing
 cp -f control.sh "$INSTALL_DIR/"
 chmod +x "$INSTALL_DIR/control.sh"
+cp -f storage.sh "$INSTALL_DIR/"
+chmod +x "$INSTALL_DIR/storage.sh"
 mkdir -p "$INSTALL_DIR/healing"
 cp -f healing/heal_oracle.sh healing/heal_tomcat.sh healing/heal_nginx.sh "$INSTALL_DIR/healing/"
 chmod +x "$INSTALL_DIR/healing/"*.sh

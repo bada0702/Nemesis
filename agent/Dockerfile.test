@@ -5,7 +5,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     iproute2 iputils-arping iputils-ping procps bc \
  && rm -rf /var/lib/apt/lists/*
 WORKDIR /opt/nemesis-agent
-COPY nemesis-agent.py control.sh collect.sh collect_aix.sh ./
+COPY nemesis-agent.py control.sh storage.sh collect.sh collect_aix.sh ./
 COPY healing ./healing
 RUN chmod +x control.sh collect.sh collect_aix.sh healing/*.sh 2>/dev/null || true
 # start 명령은 docker run에서 인자로 전달
