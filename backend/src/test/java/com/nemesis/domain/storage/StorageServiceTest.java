@@ -140,4 +140,50 @@ class StorageServiceTest {
         assertThatThrownBy(() -> svc.scan(clusterId, nodeId))
                 .isInstanceOf(IllegalStateException.class);
     }
+
+    @Test
+    void listDevices_returnsRepositoryResult() {
+        UUID clusterId = UUID.randomUUID();
+        StorageDevice device = StorageDevice.builder().wwid("abc123").build();
+        when(deviceRepo.findByClusterId(clusterId)).thenReturn(List.of(device));
+
+        var result = svc.listDevices(clusterId);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0)).isEqualTo(device);
+    }
+
+    @Test
+    void deleteDevice_throwsIllegalArgumentException_whenDeviceNotFound() {
+        UUID clusterId = UUID.randomUUID();
+        UUID deviceId = UUID.randomUUID();
+        when(deviceRepo.findById(deviceId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> svc.deleteDevice(clusterId, deviceId))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void deleteDevice_throwsIllegalArgumentException_whenDeviceBelongsToDifferentCluster() {
+        UUID clusterId = UUID.randomUUID();
+        UUID otherClusterId = UUID.randomUUID();
+        UUID deviceId = UUID.randomUUID();
+        StorageDevice device = StorageDevice.builder().cluster(cluster(otherClusterId)).wwid("abc123").build();
+        when(deviceRepo.findById(deviceId)).thenReturn(Optional.of(device));
+
+        assertThatThrownBy(() -> svc.deleteDevice(clusterId, deviceId))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void deleteDevice_deletesSuccessfully_whenDeviceBelongsToCluster() {
+        UUID clusterId = UUID.randomUUID();
+        UUID deviceId = UUID.randomUUID();
+        StorageDevice device = StorageDevice.builder().cluster(cluster(clusterId)).wwid("abc123").build();
+        when(deviceRepo.findById(deviceId)).thenReturn(Optional.of(device));
+
+        svc.deleteDevice(clusterId, deviceId);
+
+        verify(deviceRepo).deleteById(deviceId);
+    }
 }
