@@ -71,6 +71,7 @@ function ClusterStoragePanel({ cluster }) {
   const [scanning, setScanning] = useState(false)
   const [scanError, setScanError] = useState('')
   const [showManual, setShowManual] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
 
   const load = useCallback(async () => {
     const res = await getStorageDevices(cluster.clusterId)
@@ -94,8 +95,13 @@ function ClusterStoragePanel({ cluster }) {
 
   const removeDevice = async (deviceId) => {
     if (!window.confirm('이 디바이스 등록을 해제하시겠습니까? (실제 디스크는 변경되지 않습니다)')) return
-    await deleteStorageDevice(cluster.clusterId, deviceId)
-    load()
+    setDeleteError('')
+    try {
+      await deleteStorageDevice(cluster.clusterId, deviceId)
+      load()
+    } catch (e) {
+      setDeleteError(e.response?.data?.error || '삭제 실패')
+    }
   }
 
   return (
@@ -155,6 +161,7 @@ function ClusterStoragePanel({ cluster }) {
 
       <div className="border-t border-gray-800 pt-3">
         <p className="text-[10px] text-gray-500 uppercase mb-2">등록된 디바이스 ({devices.length})</p>
+        {deleteError && <div className="text-xs text-red-400 mb-2">{deleteError}</div>}
         {devices.length === 0
           ? <p className="text-xs text-gray-600">등록된 공유 디바이스가 없습니다.</p>
           : (
