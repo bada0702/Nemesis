@@ -1,5 +1,6 @@
 package com.nemesis.domain.storage;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.nemesis.domain.cluster.Cluster;
 import jakarta.persistence.*;
 import lombok.*;
@@ -26,6 +27,7 @@ public class StorageDevice {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "cluster_group_id", nullable = false)
+    @JsonIgnore // lazy 프록시 → 직렬화/세션밖 접근 방지(목록 응답에 cluster 객체는 불필요)
     private Cluster cluster;
 
     @Column(nullable = false, length = 100)
