@@ -80,6 +80,7 @@ public class RbacFilter extends OncePerRequestFilter {
             if (path.matches("/api/clusters/[^/]+/config/sync")) return Need.OPERATOR;
             if (path.matches("/api/clusters/[^/]+/sync/jobs.*"))          return Need.OPERATOR; // POST/PUT/DELETE/run
             if (path.matches("/api/clusters/[^/]+/sync/provision-ssh"))   return Need.OPERATOR;
+            if (path.matches("/api/clusters/[^/]+/storage/.*"))            return Need.OPERATOR; // scan/등록/삭제
         }
 
         // 그 외 모든 /api 요청(읽기/대시보드 포함): 로그인 사용자 필요
