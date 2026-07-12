@@ -58,6 +58,12 @@ export const runSyncJob        = (cid, jid)   => client.post(`/clusters/${cid}/s
 export const getSyncHistory    = (cid)        => client.get(`/clusters/${cid}/sync/history`)
 export const provisionSyncSsh  = (cid)        => client.post(`/clusters/${cid}/sync/provision-ssh`)
 export const browseNodeDirs    = (cid, nid, path) => client.get(`/clusters/${cid}/nodes/${nid}/dirs`, { params: { path } })
+
+// ── 공유 스토리지 (Nemesis Share, S0: 조회) ─────────────────────
+export const getStorageDevices     = (cid)          => client.get(`/clusters/${cid}/storage/devices`)
+export const scanStorage           = (cid, nodeId)  => client.post(`/clusters/${cid}/storage/scan`, null, { params: { nodeId } })
+export const registerStorageDevice = (cid, data)    => client.post(`/clusters/${cid}/storage/devices`, data)
+export const deleteStorageDevice   = (cid, deviceId)=> client.delete(`/clusters/${cid}/storage/devices/${deviceId}`)
 export const controlAppService  = (id, data)     => client.post(`/clusters/${id}/apps/control`, data)
 export const getAiAnalysis      = (id)           => client.get(`/clusters/${id}/ai-analysis`)
 
