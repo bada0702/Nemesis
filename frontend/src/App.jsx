@@ -8,6 +8,7 @@ import Dashboard         from './pages/Dashboard'
 import ServiceCatalog    from './pages/ServiceCatalog'
 import HaGroups          from './pages/ha/Groups'
 import HaSequence        from './pages/ha/Sequence'
+import Storage           from './pages/storage/Storage'
 import ServerList        from './pages/servers/List'
 import DockerContainers  from './pages/docker/Containers'
 import DockerImages      from './pages/docker/Images'
@@ -57,6 +58,9 @@ function Gate() {
           {/* HA */}
           <Route path="/ha/groups"             element={<HaGroups />} />
           <Route path="/ha/sequence"           element={<HaSequence />} />
+
+          {/* 스토리지 */}
+          <Route path="/storage"               element={<Storage />} />
 
           {/* 서버 */}
           <Route path="/servers/list"          element={<ServerList />} />

@@ -17,6 +17,7 @@ const MENU = [
 
   { label: '클러스터', icon: GitBranch, path: null, children: [
     { label: '클러스터 목록', path: '/ha/groups'         },
+    { label: '공유 스토리지', path: '/storage'           },
     { label: '서버 현황',    path: '/servers/list'       },
     { label: '트리 뷰',      path: '/clusters/tree'      },
     { label: '클러스터 설정', path: '/settings/clusters' },
