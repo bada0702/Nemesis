@@ -127,6 +127,21 @@ fs-create <wwid> <fstype> <mountpoint>
   실제 FC 없이 재현하고, 실행 후 `mount`/`lsblk`로 직접 확인.
 - 프론트: snap chromium 기반 수동 e2e로 좌우 스캔·체크박스·배치 등록 흐름 확인.
 
+## 화면 재구성 — 탭 + 폴더 동기화 이동
+
+`/storage`(사이드바 "클러스터 > 공유 스토리지") 화면 상단에 탭 2개를 둔다(왼쪽이 기본 탭):
+
+1. **로컬 폴더 동기화 설정** — 기존 `components/DirSyncPanel.jsx`를 그대로 이 탭으로 옮긴다.
+   클러스터마다 하나씩 렌더링(지금 디스크 패널과 같은 구조).
+2. **공유 디스크 설정** — 위에서 설계한 양쪽 노드 스캔 비교 + 체크박스 배치 등록 화면.
+
+`DirSyncPanel`은 `clusterId`+`nodes` props만 쓰고, `nodes` 필드(`nodeId`/`hostname`/
+`role==='PRIMARY'`)는 `Storage.jsx`가 이미 `getClusterStatus`로 받는 `cluster.nodes`와
+동일한 형태라 어댑터 없이 그대로 전달 가능하다.
+
+`pages/ClusterSettings.jsx`(클러스터 설정 > 노드관리 화면)에서는 `DirSyncPanel` 임포트와
+렌더를 완전히 제거한다 — 그 화면에는 클러스터 기본정보/토폴로지/VIP 상태/노드 관리만 남는다.
+
 ## 범위 밖 (이번에 안 하는 것)
 
 - 파티션 분할(LUN을 여러 LV로 나누기) — 여전히 v1 제외.
