@@ -7,6 +7,12 @@
 - **에이전트:** Python 3 단일 파일 (AIX/Linux), 표준 셸 메트릭 수집
 - **AIOps 사이드카:** LangGraph 기반 AI 운영자(aibot) — 능동 모니터링, 지식베이스(RAG) 기반 장애 조사, 승인 게이트 적용 조치
 
+<img width="2554" height="1268" alt="image" src="https://github.com/user-attachments/assets/a78bc3c6-5e56-4df9-8594-c1dad04a6079" />
+<img width="2551" height="1262" alt="image" src="https://github.com/user-attachments/assets/fab816ed-ba04-4a49-9fc5-1bc00692aa19" />
+<img width="2544" height="653" alt="image" src="https://github.com/user-attachments/assets/3bc42a48-4df0-47c7-aeb3-7455f416ffc1" />
+<img width="2543" height="999" alt="image" src="https://github.com/user-attachments/assets/f5099c26-54f7-4894-8a64-1161a23bc983" />
+<img width="2544" height="1004" alt="image" src="https://github.com/user-attachments/assets/df646c85-4123-418a-abd0-6e08272f58f5" />
+
 ---
 
 ## 빠른 시작 — 풀스택 (실 백엔드 + PostgreSQL)
