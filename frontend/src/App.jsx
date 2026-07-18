@@ -20,6 +20,7 @@ import ClustersSettings  from './pages/settings/Clusters'
 import AgentsSettings    from './pages/settings/Agents'
 import AgentInstall      from './pages/settings/AgentInstall'
 import SystemSettings    from './pages/settings/System'
+import KnowledgeSettings  from './pages/settings/Knowledge'
 
 import ClusterTree       from './pages/clusters/Tree'
 import ClusterDetail     from './pages/ClusterDetail'
@@ -30,8 +31,6 @@ import AuditLog          from './pages/AuditLog'
 import AiOpsCenter       from './pages/AiOpsCenter'
 import AiAnalysis        from './pages/AiAnalysis'
 import Help              from './pages/Help'
-
-import ClusterStatus     from './pages/monitoring/ClusterStatus'
 
 export default function App() {
   return (
@@ -92,6 +91,7 @@ function Gate() {
           <Route path="/settings/agents"         element={<AgentsSettings />} />
           <Route path="/settings/agents/install" element={<AgentInstall />} />
           <Route path="/settings/system"         element={<SystemSettings />} />
+          <Route path="/settings/knowledge"      element={<KnowledgeSettings />} />
 
           {/* 클러스터 상세 (기존) */}
           <Route path="/cluster/:id"           element={<ClusterDetail />} />

@@ -2,11 +2,13 @@ package com.nemesis.domain.ha;
 
 import com.nemesis.cache.MetricsCacheService;
 import com.nemesis.detection.DetectionProperties;
+import com.nemesis.domain.agent.AgentCommandClient;
 import com.nemesis.domain.cluster.Cluster;
 import com.nemesis.domain.cluster.ClusterRepository;
 import com.nemesis.domain.node.Node;
 import com.nemesis.domain.node.NodeRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -16,8 +18,11 @@ import java.util.*;
 /**
  * HA 하트비트 매트릭스·메타데이터 동기화 현황.
  * - 하트비트: 에이전트가 보고한 피어 결과(HeartbeatCache) 우선, 없으면 서버의 메트릭 신선도로 폴백.
- * - 메타데이터: 관리 서버가 메타데이터의 마스터. 노드가 신선하면 IN_SYNC, 오래되면 DIVERGED로 본다.
+ * - 메타데이터: 관리 서버가 메타데이터의 마스터(MetaVersion). 각 노드가 하트비트에 실어 보고한
+ *   appliedMetaVersion과 비교해 실제 적용 여부를 판정한다. 구버전 에이전트(미보고)는 메트릭
+ *   신선도로 폴백한다.
  */
+@Slf4j
 @RestController
 @RequestMapping("/api/ha")
 @RequiredArgsConstructor
@@ -29,6 +34,7 @@ public class HaStatusController {
     private final HeartbeatCache       heartbeatCache;
     private final ServiceLinkCache     serviceLinkCache;
     private final DetectionProperties  detectionProps;
+    private final AgentCommandClient   agentCommandClient;
 
     // ── 하트비트 매트릭스 ──────────────────────────────────────
     @GetMapping("/heartbeat/{clusterId}")
@@ -98,26 +104,34 @@ public class HaStatusController {
                 .orElseThrow(() -> new IllegalArgumentException("Cluster not found: " + clusterId));
         List<Node> nodes = nodeRepository.findByClusterId(clusterId);
 
-        // 마스터 버전: 클러스터 메타 갱신 시각을 분 단위 정수로 환산(단조 증가).
-        long masterVersion = cluster.getUpdatedAt() != null
-                ? cluster.getUpdatedAt().toEpochSecond() / 60
-                : OffsetDateTime.now().toEpochSecond() / 60;
+        long masterVersion = MetaVersion.of(cluster, nodes);
 
-        // 노드별 동기화 상태: 신선하면 IN_SYNC(마스터 버전 보유), 아니면 DIVERGED.
+        // 노드별 동기화 상태: 에이전트가 하트비트로 보고한 appliedMetaVersion을 마스터 버전과
+        // 직접 비교한다(실제 적용 여부). 구버전 에이전트(미보고)는 메트릭 신선도로 폴백한다.
         boolean allInSync = !nodes.isEmpty();
         List<Map<String, Object>> nodeStatus = new ArrayList<>();
         for (Node n : nodes) {
-            boolean inSync = metricsCache.isFresh(n.getId(), fresh);
+            Long applied = heartbeatCache.getAppliedVersion(n.getId(), fresh);
+            boolean inSync;
+            long nodeVersion;
+            if (applied != null) {
+                inSync = applied >= masterVersion;
+                nodeVersion = applied;
+            } else {
+                inSync = metricsCache.isFresh(n.getId(), fresh);
+                nodeVersion = inSync ? masterVersion : Math.max(0, masterVersion - 1);
+            }
             if (!inSync) allInSync = false;
             Map<String, Object> ns = new LinkedHashMap<>();
             ns.put("nodeId",   n.getId());
             ns.put("hostname", n.getHostname());
             ns.put("status",   inSync ? "IN_SYNC" : "DIVERGED");
-            ns.put("version",  inSync ? masterVersion : Math.max(0, masterVersion - 1));
+            ns.put("version",  nodeVersion);
             nodeStatus.add(ns);
         }
 
-        // 서버가 마스터인 메타데이터 항목(VIP·역할 배치·피어 목록).
+        // 서버가 마스터인 메타데이터 항목(VIP·역할 배치·피어 목록). 세 항목 모두 동일한
+        // 메타 blob(/api/agent/meta)에서 나오므로 같은 버전·동기화 상태를 공유한다.
         List<Map<String, Object>> items = List.of(
                 metaItem("vip",   "VIP 주소",     masterVersion, allInSync, nodeStatus),
                 metaItem("roles", "노드 역할 배치", masterVersion, allInSync, nodeStatus),
@@ -133,11 +147,28 @@ public class HaStatusController {
 
     @PostMapping("/metadata-sync/{clusterId}")
     public ResponseEntity<Map<String, Object>> triggerMetadataSync(@PathVariable UUID clusterId) {
-        // 에이전트는 /api/agent/meta 를 주기적으로 Pull 하므로, 트리거는 다음 폴링에서 반영된다.
-        clusterRepository.findById(clusterId)
-                .orElseThrow(() -> new IllegalArgumentException("Cluster not found: " + clusterId));
-        return ResponseEntity.ok(Map.of(
-                "message", "동기화 요청을 전송했습니다. 에이전트가 다음 메타데이터 폴링에서 반영합니다."));
+        List<Node> nodes = nodeRepository.findByClusterId(clusterId);
+        if (nodes.isEmpty()) {
+            throw new IllegalArgumentException("Cluster not found: " + clusterId);
+        }
+        // 다음 폴링(최대 30초)을 기다리지 않고, 각 노드에 즉시 재pull을 지시한다.
+        // 에이전트의 명령 채널(화이트리스트 스크립트 실행)과 별개인 특수 명령으로,
+        // 에이전트는 이미 주기적으로 수행하는 /api/agent/meta GET을 즉시 1회 수행할 뿐이다.
+        int ok = 0;
+        List<String> failed = new ArrayList<>();
+        for (Node n : nodes) {
+            AgentCommandClient.Result r = agentCommandClient.execute(n, "meta-pull");
+            if (r.ok()) ok++;
+            else {
+                failed.add(n.getHostname());
+                log.info("meta-pull 실패 node={}: {}", n.getHostname(),
+                        r.error() != null ? r.error() : r.stderr());
+            }
+        }
+        String message = failed.isEmpty()
+                ? String.format("%d개 노드에 즉시 동기화를 지시했습니다.", ok)
+                : String.format("%d개 노드는 동기화 지시에 성공, 응답 없는 노드: %s", ok, String.join(", ", failed));
+        return ResponseEntity.ok(Map.of("message", message, "succeeded", ok, "failed", failed));
     }
 
     private Map<String, Object> metaItem(String key, String label, long masterVersion,

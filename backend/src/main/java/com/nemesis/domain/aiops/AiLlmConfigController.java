@@ -41,6 +41,7 @@ public class AiLlmConfigController {
             body.put("llmOllamaModel", s.getLlmOllamaModel());
             body.put("llmOllamaBaseUrl", s.getLlmOllamaBaseUrl());
             body.put("llmOpenaiModel", s.getLlmOpenaiModel());
+            body.put("llmGeminiModel", s.getLlmGeminiModel());
         }
         return ResponseEntity.ok(body);
     }

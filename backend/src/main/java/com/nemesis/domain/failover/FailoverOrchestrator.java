@@ -106,7 +106,7 @@ public class FailoverOrchestrator {
         }
 
         // ── 상태 머신: to → recovering ───────────────────────────────────
-        to.setRole(Node.Role.recovering);
+        to.changeRole(Node.Role.recovering);
         nodeRepository.save(to);
 
         // ── 실제 인수: VIP 이동 ───────────────────────────────────────────
@@ -127,7 +127,7 @@ public class FailoverOrchestrator {
                     "control.sh vip-up " + ifaceOf(to) + " " + vip + " " + cidr);
             if (!up.ok()) {
                 // 롤백: 대상 노드를 standby로 되돌림
-                to.setRole(Node.Role.standby);
+                to.changeRole(Node.Role.standby);
                 nodeRepository.save(to);
                 String err = up.error() != null ? up.error() : up.stderr();
                 return record(cluster, from, to, trigger, FailoverHistory.Status.FAILED,
@@ -140,10 +140,10 @@ public class FailoverOrchestrator {
         // ── 커밋: role 전이 ───────────────────────────────────────────────
         if (from != null) {
             // 감지/AI 트리거면 이미 fault일 수 있음. 수동이면 standby로 정상 강등.
-            from.setRole(manual ? Node.Role.standby : Node.Role.fault);
+            from.changeRole(manual ? Node.Role.standby : Node.Role.fault);
             nodeRepository.save(from);
         }
-        to.setRole(Node.Role.active);
+        to.changeRole(Node.Role.active);
         nodeRepository.save(to);
 
         cluster.setLastFailoverAt(now);

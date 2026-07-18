@@ -42,6 +42,14 @@ class StorageControllerRbacTest {
     }
 
     @Test
+    void viewer_cannot_batchRegister() {
+        ResponseEntity<String> r = http.exchange(
+                "http://localhost:" + port + "/api/clusters/" + UUID.randomUUID() + "/storage/devices/batch",
+                HttpMethod.POST, as("v", User.Role.viewer), String.class);
+        assertThat(r.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    @Test
     void viewer_can_listDevices() {
         ResponseEntity<String> r = http.exchange(
                 "http://localhost:" + port + "/api/clusters/" + UUID.randomUUID() + "/storage/devices",

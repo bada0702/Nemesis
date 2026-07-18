@@ -18,6 +18,7 @@ public class SystemSettingsController {
     private static final int ID = 1;
     private final SystemSettingsRepository repository;
     private final LlmSettingsSync          llmSettingsSync;
+    private final AiMonitorSettingsSync    aiMonitorSettingsSync;
 
     @GetMapping
     public ResponseEntity<SystemSettings> get() {
@@ -33,6 +34,7 @@ public class SystemSettingsController {
         if (body.get("maxFailoverCount")     != null) s.setMaxFailoverCount(asInt(body.get("maxFailoverCount")));
         if (body.get("pingpongGuardSec")     != null) s.setPingpongGuardSec(asInt(body.get("pingpongGuardSec")));
         if (body.get("aiEnabled")            != null) s.setAiEnabled(Boolean.TRUE.equals(body.get("aiEnabled")));
+        if (body.get("aiPredictEnabled")     != null) s.setAiPredictEnabled(Boolean.TRUE.equals(body.get("aiPredictEnabled")));
         if (body.get("notificationEmail")    != null) s.setNotificationEmail((String) body.get("notificationEmail"));
         if (body.get("notificationSlack")    != null) s.setNotificationSlack((String) body.get("notificationSlack"));
         if (body.get("timezone")             != null) s.setTimezone((String) body.get("timezone"));
@@ -44,12 +46,15 @@ public class SystemSettingsController {
         if (body.get("llmOllamaModel")    != null) s.setLlmOllamaModel((String) body.get("llmOllamaModel"));
         if (body.get("llmAnthropicModel") != null) s.setLlmAnthropicModel((String) body.get("llmAnthropicModel"));
         if (body.get("llmOpenaiModel")    != null) s.setLlmOpenaiModel((String) body.get("llmOpenaiModel"));
+        if (body.get("llmGeminiModel")    != null) s.setLlmGeminiModel((String) body.get("llmGeminiModel"));
         // API 키는 비어있지 않은 값이 올 때만 갱신(빈 값/누락 시 기존 키 유지)
         if (notBlank(body.get("llmAnthropicApiKey"))) s.setLlmAnthropicApiKey(((String) body.get("llmAnthropicApiKey")).trim());
         if (notBlank(body.get("llmOpenaiApiKey")))    s.setLlmOpenaiApiKey(((String) body.get("llmOpenaiApiKey")).trim());
+        if (notBlank(body.get("llmGeminiApiKey")))    s.setLlmGeminiApiKey(((String) body.get("llmGeminiApiKey")).trim());
 
         SystemSettings saved = repository.save(s);
-        llmSettingsSync.apply(saved);   // 재기동 없이 라이브 LlmProperties에 즉시 반영
+        llmSettingsSync.apply(saved);         // 재기동 없이 라이브 LlmProperties에 즉시 반영
+        aiMonitorSettingsSync.apply(saved);   // 재기동 없이 라이브 AiOperatorProperties.Monitor에 즉시 반영
         return ResponseEntity.ok(saved);
     }
 

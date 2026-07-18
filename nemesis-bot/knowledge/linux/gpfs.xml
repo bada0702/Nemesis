@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+         xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
+         xmlns:owl="http://www.w3.org/2002/07/owl#"
+         xmlns:xsd="http://www.w3.org/2001/XMLSchema#"
+         xmlns:kb="http://nemesis.local/kb#"
+         xml:base="http://nemesis.local/kb#">
+
+  <owl:Class rdf:about="#Fault"/>
+  <owl:Class rdf:about="#Symptom"/>
+  <owl:Class rdf:about="#Cause"/>
+  <owl:Class rdf:about="#DiagnosisStep"/>
+  <owl:Class rdf:about="#Action"/>
+  <owl:Class rdf:about="#Caveat"/>
+
+  <owl:NamedIndividual rdf:about="#Fault_GpfsState">
+    <rdf:type rdf:resource="#Fault"/>
+    <rdfs:label>GPFS 상태 이상 (Linux)</rdfs:label>
+    <kb:has_fault_type>gpfs_state</kb:has_fault_type>
+    <kb:has_os>linux</kb:has_os>
+    <kb:has_target_sw>gpfs</kb:has_target_sw>
+    <kb:has_severity>high</kb:has_severity>
+    <kb:related_to rdf:resource="http://nemesis.local/kb#Fault_DiskFull"/>
+    <kb:has_symptom rdf:resource="#Symptom_GpfsState_1"/>
+    <kb:has_symptom rdf:resource="#Symptom_GpfsState_2"/>
+    <kb:has_symptom rdf:resource="#Symptom_GpfsState_3"/>
+    <kb:has_cause rdf:resource="#Cause_GpfsState_1"/>
+    <kb:has_cause rdf:resource="#Cause_GpfsState_2"/>
+    <kb:has_cause rdf:resource="#Cause_GpfsState_3"/>
+    <kb:has_cause rdf:resource="#Cause_GpfsState_4"/>
+    <kb:diagnosed_by rdf:resource="#Diagnosis_GpfsState_1"/>
+    <kb:diagnosed_by rdf:resource="#Diagnosis_GpfsState_2"/>
+    <kb:diagnosed_by rdf:resource="#Diagnosis_GpfsState_3"/>
+    <kb:resolved_by rdf:resource="#Action_GpfsState_1"/>
+    <kb:resolved_by rdf:resource="#Action_GpfsState_2"/>
+    <kb:resolved_by rdf:resource="#Action_GpfsState_3"/>
+    <kb:has_caveat rdf:resource="#Caveat_GpfsState_1"/>
+    <kb:has_caveat rdf:resource="#Caveat_GpfsState_2"/>
+  </owl:NamedIndividual>
+
+  <owl:NamedIndividual rdf:about="#Symptom_GpfsState_1">
+    <rdf:type rdf:resource="#Symptom"/>
+    <kb:order rdf:datatype="xsd:integer">1</kb:order>
+    <rdfs:label>GPFS 파일시스템이 unmounted/down, 또는 노드가 클러스터에서 이탈.</rdfs:label>
+  </owl:NamedIndividual>
+  <owl:NamedIndividual rdf:about="#Symptom_GpfsState_2">
+    <rdf:type rdf:resource="#Symptom"/>
+    <kb:order rdf:datatype="xsd:integer">2</kb:order>
+    <rdfs:label>공유 스토리지 접근 실패로 애플리케이션 I/O 오류.</rdfs:label>
+  </owl:NamedIndividual>
+  <owl:NamedIndividual rdf:about="#Symptom_GpfsState_3">
+    <rdf:type rdf:resource="#Symptom"/>
+    <kb:order rdf:datatype="xsd:integer">3</kb:order>
+    <rdfs:label>gpfs-state 조회 시 active 가 아닌 상태(arbitrating/down/unmount).</rdfs:label>
+  </owl:NamedIndividual>
+
+  <owl:NamedIndividual rdf:about="#Cause_GpfsState_1">
+    <rdf:type rdf:resource="#Cause"/>
+    <kb:order rdf:datatype="xsd:integer">1</kb:order>
+    <rdfs:label>쿼럼 상실(quorum loss) — 노드/타이브레이커 다운으로 클러스터 마비.</rdfs:label>
+  </owl:NamedIndividual>
+  <owl:NamedIndividual rdf:about="#Cause_GpfsState_2">
+    <rdf:type rdf:resource="#Cause"/>
+    <kb:order rdf:datatype="xsd:integer">2</kb:order>
+    <rdfs:label>네트워크 분단으로 GPFS 데몬 간 통신 두절.</rdfs:label>
+  </owl:NamedIndividual>
+  <owl:NamedIndividual rdf:about="#Cause_GpfsState_3">
+    <rdf:type rdf:resource="#Cause"/>
+    <kb:order rdf:datatype="xsd:integer">3</kb:order>
+    <rdfs:label>마운트 실패(디바이스/권한/설정).</rdfs:label>
+  </owl:NamedIndividual>
+  <owl:NamedIndividual rdf:about="#Cause_GpfsState_4">
+    <rdf:type rdf:resource="#Cause"/>
+    <kb:order rdf:datatype="xsd:integer">4</kb:order>
+    <rdfs:label>노드 재부팅 후 자동 마운트 미수행.</rdfs:label>
+  </owl:NamedIndividual>
+
+  <owl:NamedIndividual rdf:about="#Diagnosis_GpfsState_1">
+    <rdf:type rdf:resource="#DiagnosisStep"/>
+    <kb:order rdf:datatype="xsd:integer">1</kb:order>
+    <kb:has_command>control.sh gpfs-state</kb:has_command>
+    <rdfs:label>mmgetstate 기반 현재 상태 확인.</rdfs:label>
+  </owl:NamedIndividual>
+  <owl:NamedIndividual rdf:about="#Diagnosis_GpfsState_2">
+    <rdf:type rdf:resource="#DiagnosisStep"/>
+    <kb:order rdf:datatype="xsd:integer">2</kb:order>
+    <rdfs:label>state 가 active 가 아니면 마운트/쿼럼 문제로 구분.</rdfs:label>
+  </owl:NamedIndividual>
+  <owl:NamedIndividual rdf:about="#Diagnosis_GpfsState_3">
+    <rdf:type rdf:resource="#DiagnosisStep"/>
+    <kb:order rdf:datatype="xsd:integer">3</kb:order>
+    <kb:has_command>control.sh health</kb:has_command>
+    <rdfs:label>네트워크/노드 헬스로 분단 여부 확인.</rdfs:label>
+  </owl:NamedIndividual>
+
+  <owl:NamedIndividual rdf:about="#Action_GpfsState_1">
+    <rdf:type rdf:resource="#Action"/>
+    <kb:order rdf:datatype="xsd:integer">1</kb:order>
+    <kb:has_risk>MEDIUM</kb:has_risk>
+    <kb:has_command>control.sh gpfs-mount</kb:has_command>
+    <rdfs:label>마운트 복구.</rdfs:label>
+  </owl:NamedIndividual>
+  <owl:NamedIndividual rdf:about="#Action_GpfsState_2">
+    <rdf:type rdf:resource="#Action"/>
+    <kb:order rdf:datatype="xsd:integer">2</kb:order>
+    <kb:has_risk>MEDIUM</kb:has_risk>
+    <kb:has_command>control.sh gpfs-umount</kb:has_command>
+    <rdfs:label>정비 상황에서 언마운트.</rdfs:label>
+  </owl:NamedIndividual>
+  <owl:NamedIndividual rdf:about="#Action_GpfsState_3">
+    <rdf:type rdf:resource="#Action"/>
+    <kb:order rdf:datatype="xsd:integer">3</kb:order>
+    <kb:has_risk>LOW</kb:has_risk>
+    <rdfs:label>쿼럼 상실은 단일 노드 조치로 해결 불가 — 클러스터 전체 관점 판단 필요.</rdfs:label>
+  </owl:NamedIndividual>
+
+  <owl:NamedIndividual rdf:about="#Caveat_GpfsState_1">
+    <rdf:type rdf:resource="#Caveat"/>
+    <kb:order rdf:datatype="xsd:integer">1</kb:order>
+    <rdfs:label>gpfs-state 가 정상(active)인데 주입된 신호가 이상이면 실제 관측을 우선(모킹/오래된 신호일 수 있음). 도구로 원인 미특정 시 confidence 낮출 것.</rdfs:label>
+  </owl:NamedIndividual>
+  <owl:NamedIndividual rdf:about="#Caveat_GpfsState_2">
+    <rdf:type rdf:resource="#Caveat"/>
+    <kb:order rdf:datatype="xsd:integer">2</kb:order>
+    <rdfs:label>쿼럼/분단 문제는 강제 마운트로 악화될 수 있으니 원인 확정 후 조치.</rdfs:label>
+  </owl:NamedIndividual>
+
+</rdf:RDF>

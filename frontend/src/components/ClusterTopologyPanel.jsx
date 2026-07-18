@@ -3,10 +3,10 @@ import { getClusterStatus, getClusterGpfs, getClusterNetwork, getClusterVipStatu
 
 const POLL_MS = 3000
 
-function statusGlow(role, state) {
-  if (state === 'STOPPED' || role === 'FAULT') return 'red'
-  if (role === 'RECOVERING')                   return 'amber'
-  if (role === 'PRIMARY')                      return 'sky'
+function statusGlow(role) {
+  if (role === 'FAULT')       return 'red'
+  if (role === 'RECOVERING')  return 'amber'
+  if (role === 'PRIMARY')     return 'sky'
   return 'emerald'
 }
 
@@ -99,7 +99,7 @@ function VipBadge({ cx, y }) {
 
 /* ---------- 노드 박스 ---------- */
 function NodeBox({ x, y, w, h, node, gpfsState, hasVip, selected, onClick }) {
-  const g  = GLOW[statusGlow(node.role, node.state)]
+  const g  = GLOW[statusGlow(node.role)]
   const isUp = node.state === 'RUNNING'
   const gf = gpfsState ? GPFS_CFG[gpfsState] : null
   const procs = node.metrics?.processes ?? []
@@ -219,7 +219,7 @@ function ServiceList({ processes }) {
 function NodeDetail({ node, gpfsState, netRows, onClose }) {
   if (!node) return null
   const m  = node.metrics
-  const g  = GLOW[statusGlow(node.role, node.state)]
+  const g  = GLOW[statusGlow(node.role)]
   const gf = gpfsState ? GPFS_CFG[gpfsState] : null
 
   function Bar({ label, value, color }) {

@@ -716,8 +716,13 @@ class LangGraphAgent:
 
         return final_text
 
-    def run_investigation(self, context: dict, ssh_target: dict) -> dict:
-        """읽기전용 도구만 바인딩해 1회 조사하고, 구조화 조치안 JSON을 반환한다."""
+    def run_investigation(self, context: dict, ssh_target: dict,
+                          knowledge_enabled: bool = True) -> dict:
+        """읽기전용 도구만 바인딩해 1회 조사하고, 구조화 조치안 JSON을 반환한다.
+
+        knowledge_enabled: 지식베이스 상시 주입 on/off (평가 하네스가 OFF 모드 측정에 사용).
+        전역 env NEMESIS_KNOWLEDGE_DISABLED=1 이면 요청 플래그와 무관하게 비주입.
+        """
         import json as _json
         from nemesis_ops_tools import READ_TOOLS, set_ssh_context
         set_ssh_context(ssh_target.get("host"), ssh_target.get("port", 22),
@@ -738,6 +743,18 @@ class LangGraphAgent:
             "- 인증키 생성·복구·교체(.ssh, id_rsa, authorized_keys 등), sudo/권한 변경, "
             "서비스 재시작/중지, 재부팅은 riskLevel 을 HIGH 로 표기하십시오."
         )
+        # Phase 1: linux/docker 지식을 시스템 프롬프트에 상시 주입(매칭 없이 전체).
+        # 지식 주입은 조사 품질을 돕는 컨텍스트일 뿐이며, 실패해도 무주입으로 조사를 계속한다.
+        kb_skipped = []
+        try:
+            from knowledge_base import build_knowledge_context
+            kb_text, kb_skipped = build_knowledge_context(request_enabled=knowledge_enabled)
+            if kb_text:
+                sys = sys + "\n\n" + kb_text
+            if kb_skipped:
+                logger.warning("지식 파일 skip: %s", kb_skipped)
+        except Exception:
+            logger.warning("지식 주입 실패 — 무주입으로 진행", exc_info=True)
         msg = "장애 컨텍스트: " + _json.dumps(context, ensure_ascii=False)
         from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
         state = {"messages": [HumanMessage(content=msg)], "user_id": 0, "chat_id": 0,
@@ -750,7 +767,10 @@ class LangGraphAgent:
                 text = _content_to_text(m.content)
                 if text:
                     break
-        return self._parse_plan(text, context)
+        plan = self._parse_plan(text, context)
+        if kb_skipped:
+            plan["knowledgeSkipped"] = kb_skipped
+        return plan
 
     @staticmethod
     def _parse_plan(text: str, context: dict) -> dict:

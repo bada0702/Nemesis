@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+         xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
+         xmlns:owl="http://www.w3.org/2002/07/owl#"
+         xmlns:xsd="http://www.w3.org/2001/XMLSchema#"
+         xmlns:kb="http://nemesis.local/kb#"
+         xml:base="http://nemesis.local/kb#">
+
+  <owl:Class rdf:about="#Fault"/>
+  <owl:Class rdf:about="#Symptom"/>
+  <owl:Class rdf:about="#Cause"/>
+  <owl:Class rdf:about="#DiagnosisStep"/>
+  <owl:Class rdf:about="#Action"/>
+  <owl:Class rdf:about="#Caveat"/>
+
+  <owl:NamedIndividual rdf:about="#Fault_VipDrift">
+    <rdf:type rdf:resource="#Fault"/>
+    <rdfs:label>VIP 드리프트 / 이중 VIP (Linux)</rdfs:label>
+    <kb:has_fault_type>vip_drift</kb:has_fault_type>
+    <kb:has_os>linux</kb:has_os>
+    <kb:has_target_sw>vip</kb:has_target_sw>
+    <kb:has_severity>high</kb:has_severity>
+    <kb:related_to rdf:resource="http://nemesis.local/kb#Fault_ProcessDown"/>
+    <kb:has_symptom rdf:resource="#Symptom_VipDrift_1"/>
+    <kb:has_symptom rdf:resource="#Symptom_VipDrift_2"/>
+    <kb:has_symptom rdf:resource="#Symptom_VipDrift_3"/>
+    <kb:has_cause rdf:resource="#Cause_VipDrift_1"/>
+    <kb:has_cause rdf:resource="#Cause_VipDrift_2"/>
+    <kb:has_cause rdf:resource="#Cause_VipDrift_3"/>
+    <kb:has_cause rdf:resource="#Cause_VipDrift_4"/>
+    <kb:diagnosed_by rdf:resource="#Diagnosis_VipDrift_1"/>
+    <kb:diagnosed_by rdf:resource="#Diagnosis_VipDrift_2"/>
+    <kb:diagnosed_by rdf:resource="#Diagnosis_VipDrift_3"/>
+    <kb:resolved_by rdf:resource="#Action_VipDrift_1"/>
+    <kb:resolved_by rdf:resource="#Action_VipDrift_2"/>
+    <kb:resolved_by rdf:resource="#Action_VipDrift_3"/>
+    <kb:resolved_by rdf:resource="#Action_VipDrift_4"/>
+    <kb:has_caveat rdf:resource="#Caveat_VipDrift_1"/>
+    <kb:has_caveat rdf:resource="#Caveat_VipDrift_2"/>
+  </owl:NamedIndividual>
+
+  <owl:NamedIndividual rdf:about="#Symptom_VipDrift_1">
+    <rdf:type rdf:resource="#Symptom"/>
+    <kb:order rdf:datatype="xsd:integer">1</kb:order>
+    <rdfs:label>서비스 VIP 가 active 노드에 없거나(드리프트), 두 노드에 동시에 존재(스플릿).</rdfs:label>
+  </owl:NamedIndividual>
+  <owl:NamedIndividual rdf:about="#Symptom_VipDrift_2">
+    <rdf:type rdf:resource="#Symptom"/>
+    <kb:order rdf:datatype="xsd:integer">2</kb:order>
+    <rdfs:label>클라이언트가 VIP 로 접속 불가, 또는 ARP 캐시가 잘못된 노드를 가리킴.</rdfs:label>
+  </owl:NamedIndividual>
+  <owl:NamedIndividual rdf:about="#Symptom_VipDrift_3">
+    <rdf:type rdf:resource="#Symptom"/>
+    <kb:order rdf:datatype="xsd:integer">3</kb:order>
+    <rdfs:label>VipReconciler 로그에 드리프트 감지/복원 기록.</rdfs:label>
+  </owl:NamedIndividual>
+
+  <owl:NamedIndividual rdf:about="#Cause_VipDrift_1">
+    <rdf:type rdf:resource="#Cause"/>
+    <kb:order rdf:datatype="xsd:integer">1</kb:order>
+    <rdfs:label>페일오버 도중/직후 VIP 이관 미완료.</rdfs:label>
+  </owl:NamedIndividual>
+  <owl:NamedIndividual rdf:about="#Cause_VipDrift_2">
+    <rdf:type rdf:resource="#Cause"/>
+    <kb:order rdf:datatype="xsd:integer">2</kb:order>
+    <rdfs:label>수동 개입으로 VIP 제거(ip addr del) 후 미복원.</rdfs:label>
+  </owl:NamedIndividual>
+  <owl:NamedIndividual rdf:about="#Cause_VipDrift_3">
+    <rdf:type rdf:resource="#Cause"/>
+    <kb:order rdf:datatype="xsd:integer">3</kb:order>
+    <rdfs:label>net_iface 설정과 실제 NIC 불일치(eth0 설정인데 실제는 wlp5s0) → Cannot find device.</rdfs:label>
+  </owl:NamedIndividual>
+  <owl:NamedIndividual rdf:about="#Cause_VipDrift_4">
+    <rdf:type rdf:resource="#Cause"/>
+    <kb:order rdf:datatype="xsd:integer">4</kb:order>
+    <rdfs:label>GARP 미전송으로 스위치 ARP 테이블이 옛 노드 유지.</rdfs:label>
+  </owl:NamedIndividual>
+
+  <owl:NamedIndividual rdf:about="#Diagnosis_VipDrift_1">
+    <rdf:type rdf:resource="#DiagnosisStep"/>
+    <kb:order rdf:datatype="xsd:integer">1</kb:order>
+    <kb:has_command>control.sh vip-check &lt;vip&gt;</kb:has_command>
+    <rdfs:label>현재 노드의 VIP 존재 여부(exit 0=present).</rdfs:label>
+  </owl:NamedIndividual>
+  <owl:NamedIndividual rdf:about="#Diagnosis_VipDrift_2">
+    <rdf:type rdf:resource="#DiagnosisStep"/>
+    <kb:order rdf:datatype="xsd:integer">2</kb:order>
+    <rdfs:label>양 노드에서 vip-check 로 스플릿(양쪽 present) 여부 확인.</rdfs:label>
+  </owl:NamedIndividual>
+  <owl:NamedIndividual rdf:about="#Diagnosis_VipDrift_3">
+    <rdf:type rdf:resource="#DiagnosisStep"/>
+    <kb:order rdf:datatype="xsd:integer">3</kb:order>
+    <rdfs:label>VipReconciler 는 약 45초 주기로 드리프트를 자동 복원(정상이면 곧 회복).</rdfs:label>
+  </owl:NamedIndividual>
+
+  <owl:NamedIndividual rdf:about="#Action_VipDrift_1">
+    <rdf:type rdf:resource="#Action"/>
+    <kb:order rdf:datatype="xsd:integer">1</kb:order>
+    <kb:has_risk>MEDIUM</kb:has_risk>
+    <kb:has_command>control.sh vip-up &lt;vip&gt;</kb:has_command>
+    <rdfs:label>active 노드에 VIP 부여.</rdfs:label>
+  </owl:NamedIndividual>
+  <owl:NamedIndividual rdf:about="#Action_VipDrift_2">
+    <rdf:type rdf:resource="#Action"/>
+    <kb:order rdf:datatype="xsd:integer">2</kb:order>
+    <kb:has_risk>MEDIUM</kb:has_risk>
+    <kb:has_command>control.sh vip-down &lt;vip&gt;</kb:has_command>
+    <rdfs:label>잘못된 노드에서 VIP 제거.</rdfs:label>
+  </owl:NamedIndividual>
+  <owl:NamedIndividual rdf:about="#Action_VipDrift_3">
+    <rdf:type rdf:resource="#Action"/>
+    <kb:order rdf:datatype="xsd:integer">3</kb:order>
+    <kb:has_risk>LOW</kb:has_risk>
+    <kb:has_command>control.sh garp &lt;vip&gt; &lt;iface&gt;</kb:has_command>
+    <rdfs:label>스위치 ARP 테이블 즉시 갱신.</rdfs:label>
+  </owl:NamedIndividual>
+  <owl:NamedIndividual rdf:about="#Action_VipDrift_4">
+    <rdf:type rdf:resource="#Action"/>
+    <kb:order rdf:datatype="xsd:integer">4</kb:order>
+    <kb:has_risk>LOW</kb:has_risk>
+    <rdfs:label>급한 스플릿이 아니면 VipReconciler 자동 복원을 관찰 우선.</rdfs:label>
+  </owl:NamedIndividual>
+
+  <owl:NamedIndividual rdf:about="#Caveat_VipDrift_1">
+    <rdf:type rdf:resource="#Caveat"/>
+    <kb:order rdf:datatype="xsd:integer">1</kb:order>
+    <rdfs:label>control.sh 는 net_iface 없으면 ip route get 으로 실제 NIC 자동 해석(resolve_iface). 수동 vip-up 시 iface 불일치 오류는 이 로직으로 흡수됨.</rdfs:label>
+  </owl:NamedIndividual>
+  <owl:NamedIndividual rdf:about="#Caveat_VipDrift_2">
+    <rdf:type rdf:resource="#Caveat"/>
+    <kb:order rdf:datatype="xsd:integer">2</kb:order>
+    <rdfs:label>스플릿(양 노드 present)은 즉시 조치 대상 — 데이터 정합성 위험.</rdfs:label>
+  </owl:NamedIndividual>
+
+</rdf:RDF>

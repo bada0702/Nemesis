@@ -41,6 +41,15 @@ dist/
 *.rar
 hs_err_pid*
 
+# Python
+__pycache__/
+*.pyc
+
+# Runtime artifacts
+*.pid
+*.port
+agent/~/
+
 # Env
 .env
 .env.local

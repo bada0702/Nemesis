@@ -95,6 +95,15 @@ export default function SystemSettings() {
               <span className="text-xs text-gray-400">{settings.aiEnabled ? '활성화됨' : '비활성화됨'}</span>
             </label>
           </Field>
+          <Field label="AI 장애 예측 활성화" hint="디스크·메모리 사용률 추세를 분석해 임계치 도달 시점을 예측합니다">
+            <label className="flex items-center gap-3 cursor-pointer mt-2">
+              <div onClick={() => set('aiPredictEnabled', !settings.aiPredictEnabled)}
+                className={`w-10 h-5 rounded-full transition-colors relative ${settings.aiPredictEnabled ? 'bg-blue-600' : 'bg-gray-700'}`}>
+                <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-all ${settings.aiPredictEnabled ? 'left-5' : 'left-0.5'}`} />
+              </div>
+              <span className="text-xs text-gray-400">{settings.aiPredictEnabled ? '활성화됨' : '비활성화됨'}</span>
+            </label>
+          </Field>
         </div>
 
         {/* AI (LLM) */}
@@ -105,6 +114,7 @@ export default function SystemSettings() {
               <option value="ollama">Ollama (로컬)</option>
               <option value="anthropic">Anthropic (Claude)</option>
               <option value="openai">OpenAI</option>
+              <option value="gemini">Google Gemini</option>
             </select>
           </Field>
           {(settings.llmProvider ?? 'ollama') === 'ollama' && (
@@ -136,6 +146,17 @@ export default function SystemSettings() {
               <Field label="OpenAI API 키" hint={settings.llmOpenaiApiKeySet ? '설정됨 — 변경하려면 새 키 입력' : '미설정'}>
                 <input type="password" value={settings.llmOpenaiApiKey ?? ''} onChange={e => set('llmOpenaiApiKey', e.target.value)} className={inputCls}
                   placeholder={settings.llmOpenaiApiKeySet ? '••••••••(설정됨, 유지하려면 비워두세요)' : 'sk-...'} />
+              </Field>
+            </div>
+          )}
+          {settings.llmProvider === 'gemini' && (
+            <div className="grid grid-cols-2 gap-4 mt-1">
+              <Field label="Gemini 모델">
+                <input value={settings.llmGeminiModel ?? ''} onChange={e => set('llmGeminiModel', e.target.value)} className={inputCls} placeholder="gemini-2.0-flash" />
+              </Field>
+              <Field label="Gemini API 키" hint={settings.llmGeminiApiKeySet ? '설정됨 — 변경하려면 새 키 입력' : '미설정 (Google AI Studio 발급)'}>
+                <input type="password" value={settings.llmGeminiApiKey ?? ''} onChange={e => set('llmGeminiApiKey', e.target.value)} className={inputCls}
+                  placeholder={settings.llmGeminiApiKeySet ? '••••••••(설정됨, 유지하려면 비워두세요)' : 'AIza...'} />
               </Field>
             </div>
           )}

@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+         xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
+         xmlns:owl="http://www.w3.org/2002/07/owl#"
+         xmlns:xsd="http://www.w3.org/2001/XMLSchema#"
+         xmlns:kb="http://nemesis.local/kb#"
+         xml:base="http://nemesis.local/kb#">
+
+  <owl:Class rdf:about="#Fault"/>
+  <owl:Class rdf:about="#Symptom"/>
+  <owl:Class rdf:about="#Cause"/>
+  <owl:Class rdf:about="#DiagnosisStep"/>
+  <owl:Class rdf:about="#Action"/>
+  <owl:Class rdf:about="#Caveat"/>
+
+  <owl:NamedIndividual rdf:about="#Fault_ProcessDown">
+    <rdf:type rdf:resource="#Fault"/>
+    <rdfs:label>프로세스/서비스 다운 (Linux)</rdfs:label>
+    <kb:has_fault_type>process_down</kb:has_fault_type>
+    <kb:has_os>linux</kb:has_os>
+    <kb:has_target_sw>service</kb:has_target_sw>
+    <kb:has_severity>high</kb:has_severity>
+    <kb:related_to rdf:resource="http://nemesis.local/kb#Fault_ContainerDown"/>
+    <kb:has_symptom rdf:resource="#Symptom_ProcessDown_1"/>
+    <kb:has_symptom rdf:resource="#Symptom_ProcessDown_2"/>
+    <kb:has_symptom rdf:resource="#Symptom_ProcessDown_3"/>
+    <kb:has_cause rdf:resource="#Cause_ProcessDown_1"/>
+    <kb:has_cause rdf:resource="#Cause_ProcessDown_2"/>
+    <kb:has_cause rdf:resource="#Cause_ProcessDown_3"/>
+    <kb:has_cause rdf:resource="#Cause_ProcessDown_4"/>
+    <kb:diagnosed_by rdf:resource="#Diagnosis_ProcessDown_1"/>
+    <kb:diagnosed_by rdf:resource="#Diagnosis_ProcessDown_2"/>
+    <kb:diagnosed_by rdf:resource="#Diagnosis_ProcessDown_3"/>
+    <kb:diagnosed_by rdf:resource="#Diagnosis_ProcessDown_4"/>
+    <kb:resolved_by rdf:resource="#Action_ProcessDown_1"/>
+    <kb:resolved_by rdf:resource="#Action_ProcessDown_2"/>
+    <kb:resolved_by rdf:resource="#Action_ProcessDown_3"/>
+    <kb:has_caveat rdf:resource="#Caveat_ProcessDown_1"/>
+    <kb:has_caveat rdf:resource="#Caveat_ProcessDown_2"/>
+  </owl:NamedIndividual>
+
+  <owl:NamedIndividual rdf:about="#Symptom_ProcessDown_1">
+    <rdf:type rdf:resource="#Symptom"/>
+    <kb:order rdf:datatype="xsd:integer">1</kb:order>
+    <rdfs:label>DetectionEvent PROCESS_DOWN 발생, 또는 특정 서비스 포트 무응답.</rdfs:label>
+  </owl:NamedIndividual>
+  <owl:NamedIndividual rdf:about="#Symptom_ProcessDown_2">
+    <rdf:type rdf:resource="#Symptom"/>
+    <kb:order rdf:datatype="xsd:integer">2</kb:order>
+    <rdfs:label>에이전트 메트릭은 정상인데 애플리케이션 헬스체크 실패.</rdfs:label>
+  </owl:NamedIndividual>
+  <owl:NamedIndividual rdf:about="#Symptom_ProcessDown_3">
+    <rdf:type rdf:resource="#Symptom"/>
+    <kb:order rdf:datatype="xsd:integer">3</kb:order>
+    <rdfs:label>노드 role 은 active 유지되나 서비스 기능이 죽음.</rdfs:label>
+  </owl:NamedIndividual>
+
+  <owl:NamedIndividual rdf:about="#Cause_ProcessDown_1">
+    <rdf:type rdf:resource="#Cause"/>
+    <kb:order rdf:datatype="xsd:integer">1</kb:order>
+    <rdfs:label>프로세스 OOM kill(메모리 부족) — dmesg 에 "Out of memory" 흔적.</rdfs:label>
+  </owl:NamedIndividual>
+  <owl:NamedIndividual rdf:about="#Cause_ProcessDown_2">
+    <rdf:type rdf:resource="#Cause"/>
+    <kb:order rdf:datatype="xsd:integer">2</kb:order>
+    <rdfs:label>비정상 종료 후 systemd Restart 정책 부재/실패.</rdfs:label>
+  </owl:NamedIndividual>
+  <owl:NamedIndividual rdf:about="#Cause_ProcessDown_3">
+    <rdf:type rdf:resource="#Cause"/>
+    <kb:order rdf:datatype="xsd:integer">3</kb:order>
+    <rdfs:label>설정 오류로 기동 직후 크래시(crash loop).</rdfs:label>
+  </owl:NamedIndividual>
+  <owl:NamedIndividual rdf:about="#Cause_ProcessDown_4">
+    <rdf:type rdf:resource="#Cause"/>
+    <kb:order rdf:datatype="xsd:integer">4</kb:order>
+    <rdfs:label>의존 서비스(DB, 마운트) 미준비 상태에서 기동 실패.</rdfs:label>
+  </owl:NamedIndividual>
+
+  <owl:NamedIndividual rdf:about="#Diagnosis_ProcessDown_1">
+    <rdf:type rdf:resource="#DiagnosisStep"/>
+    <kb:order rdf:datatype="xsd:integer">1</kb:order>
+    <kb:has_command>control.sh svc-status &lt;service&gt;</kb:has_command>
+    <rdfs:label>유닛 상태/최근 종료 코드 확인.</rdfs:label>
+  </owl:NamedIndividual>
+  <owl:NamedIndividual rdf:about="#Diagnosis_ProcessDown_2">
+    <rdf:type rdf:resource="#DiagnosisStep"/>
+    <kb:order rdf:datatype="xsd:integer">2</kb:order>
+    <kb:has_command>control.sh logs &lt;service&gt;</kb:has_command>
+    <rdfs:label>최근 로그에서 크래시/스택트레이스 확인.</rdfs:label>
+  </owl:NamedIndividual>
+  <owl:NamedIndividual rdf:about="#Diagnosis_ProcessDown_3">
+    <rdf:type rdf:resource="#DiagnosisStep"/>
+    <kb:order rdf:datatype="xsd:integer">3</kb:order>
+    <kb:has_command>control.sh health</kb:has_command>
+    <rdfs:label>노드 전반 헬스 확인.</rdfs:label>
+  </owl:NamedIndividual>
+  <owl:NamedIndividual rdf:about="#Diagnosis_ProcessDown_4">
+    <rdf:type rdf:resource="#DiagnosisStep"/>
+    <kb:order rdf:datatype="xsd:integer">4</kb:order>
+    <rdfs:label>프로세스명 != systemd 유닛명일 수 있음(sshd→ssh). control.sh 가 resolve_unit()으로 실제 유닛을 해석하므로 svc-* 서브커맨드로 접근할 것.</rdfs:label>
+  </owl:NamedIndividual>
+
+  <owl:NamedIndividual rdf:about="#Action_ProcessDown_1">
+    <rdf:type rdf:resource="#Action"/>
+    <kb:order rdf:datatype="xsd:integer">1</kb:order>
+    <kb:has_risk>MEDIUM</kb:has_risk>
+    <kb:has_command>control.sh svc-restart &lt;service&gt;</kb:has_command>
+    <rdfs:label>서비스 재기동.</rdfs:label>
+  </owl:NamedIndividual>
+  <owl:NamedIndividual rdf:about="#Action_ProcessDown_2">
+    <rdf:type rdf:resource="#Action"/>
+    <kb:order rdf:datatype="xsd:integer">2</kb:order>
+    <kb:has_risk>LOW</kb:has_risk>
+    <rdfs:label>OOM 이 원인이면 재기동만으로 재발 — 메모리 원인 프로세스 확인 후 조치.</rdfs:label>
+  </owl:NamedIndividual>
+  <owl:NamedIndividual rdf:about="#Action_ProcessDown_3">
+    <rdf:type rdf:resource="#Action"/>
+    <kb:order rdf:datatype="xsd:integer">3</kb:order>
+    <kb:has_risk>LOW</kb:has_risk>
+    <rdfs:label>crash loop 이면 재기동 전에 설정/의존성부터 점검(무한 재시작 방지).</rdfs:label>
+  </owl:NamedIndividual>
+
+  <owl:NamedIndividual rdf:about="#Caveat_ProcessDown_1">
+    <rdf:type rdf:resource="#Caveat"/>
+    <kb:order rdf:datatype="xsd:integer">1</kb:order>
+    <rdfs:label>컨테이너 노드(bot-02)는 systemd 부재로 svc-* 제어 불가 — docker/runtime.xml 참조.</rdfs:label>
+  </owl:NamedIndividual>
+  <owl:NamedIndividual rdf:about="#Caveat_ProcessDown_2">
+    <rdf:type rdf:resource="#Caveat"/>
+    <kb:order rdf:datatype="xsd:integer">2</kb:order>
+    <rdfs:label>재기동은 순간적으로 서비스 중단을 유발하므로 active 노드면 페일오버 영향 확인.</rdfs:label>
+  </owl:NamedIndividual>
+
+</rdf:RDF>

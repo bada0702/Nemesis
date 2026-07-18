@@ -64,6 +64,15 @@ public class Cluster {
     @Column(name = "updated_at")
     private OffsetDateTime updatedAt;
 
+    /**
+     * 영속되지 않는 조회용 노드 목록(역할 포함). GET /clusters 응답에서 각 클러스터의
+     * 이중화 구성을 /clusters/{id}/status 와 동일한 형태로 실어 내려, 대시보드·클러스터
+     * 목록·노드 관리가 같은 소스를 보게 한다. 컨트롤러가 NodeService 로 채운다.
+     */
+    @Transient
+    @Builder.Default
+    private java.util.List<com.nemesis.dto.ClusterStatusResponse.NodeStatus> nodes = new java.util.ArrayList<>();
+
     @PrePersist
     void prePersist() {
         this.createdAt = OffsetDateTime.now();

@@ -35,6 +35,8 @@ public class LlmSettingsSync {
         if (notBlank(s.getLlmAnthropicModel()))  props.getAnthropic().setModel(s.getLlmAnthropicModel().trim());
         if (notBlank(s.getLlmOpenaiApiKey()))    props.getOpenai().setApiKey(s.getLlmOpenaiApiKey().trim());
         if (notBlank(s.getLlmOpenaiModel()))     props.getOpenai().setModel(s.getLlmOpenaiModel().trim());
+        if (notBlank(s.getLlmGeminiApiKey()))    props.getGemini().setApiKey(s.getLlmGeminiApiKey().trim());
+        if (notBlank(s.getLlmGeminiModel()))     props.getGemini().setModel(s.getLlmGeminiModel().trim());
     }
 
     private boolean notBlank(String v) {

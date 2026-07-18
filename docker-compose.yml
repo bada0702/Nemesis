@@ -18,6 +18,10 @@ services:
     # 호스트의 Ollama(11434)에 host.docker.internal 로 도달.
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    volumes:
+      # 에이전트 설치 마법사(AgentInstallService)가 SCP로 배포할 소스 파일 위치.
+      # nemesis.agent.files-dir 기본값과 동일한 절대경로로 마운트해야 한다.
+      - ./agent:/var/www/html/Nemesis_v100/agent:ro
     networks:
       - nemesis-net
 
@@ -35,6 +39,8 @@ services:
       - .env
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    volumes:
+      - ./agent:/var/www/html/Nemesis_v100/agent:ro
     networks:
       - nemesis-net
 

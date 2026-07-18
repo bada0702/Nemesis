@@ -57,6 +57,7 @@ def _fetch_backend_llm():
             "ollamaModel":   (d.get("llmOllamaModel") or "").strip(),
             "ollamaBaseUrl": (d.get("llmOllamaBaseUrl") or "").strip(),
             "openaiModel":   (d.get("llmOpenaiModel") or "").strip(),
+            "geminiModel":   (d.get("llmGeminiModel") or "").strip(),
         }
     except Exception as e:
         logger.warning("백엔드 LLM 설정 조회 실패(.env 유지): %s", e)
@@ -70,9 +71,10 @@ def _apply_backend_llm(s):
     import langgraph_agent as lga
 
     provider = s["provider"]
-    # 백엔드 provider(ollama|openai|anthropic) → aibot 매핑.
+    # 백엔드 provider(ollama|openai|anthropic|gemini) → aibot 매핑.
     # anthropic 은 langgraph 에이전트 미지원 → 경고 후 기존(.env) provider 유지.
-    if provider not in ("ollama", "openai"):
+    # gemini 는 langgraph 에이전트 지원(langchain_google_genai + 사이드카 .env 의 GEMINI_API_KEY 필요).
+    if provider not in ("ollama", "openai", "gemini"):
         if provider:
             logger.warning("aibot 에이전트 미지원 provider '%s' → .env 설정 유지", provider)
         return None
@@ -83,6 +85,17 @@ def _apply_backend_llm(s):
         if s["ollamaBaseUrl"]: overrides["OLLAMA_BASE_URL"] = s["ollamaBaseUrl"]
     elif provider == "openai":
         if s["openaiModel"]:   overrides["OPENAI_MODEL"] = s["openaiModel"]
+    elif provider == "gemini":
+        # 사이드카 investigate 에이전트의 gemini 경로는 langchain_google_genai 가 필요하다.
+        # 미설치면 provider 전환을 건너뛰어(기존 provider 유지) investigate 회귀를 막는다.
+        # (백엔드 LlmService 의 gemini 경로 — /ai/analysis·HA 판단 — 는 이 패키지 없이도 동작한다.)
+        import importlib.util
+        if importlib.util.find_spec("langchain_google_genai") is None:
+            logger.warning("gemini 선택됨이나 사이드카에 langchain_google_genai 미설치 → "
+                           "investigate 는 기존 provider 유지(백엔드 분석 경로는 gemini 사용). "
+                           "사이드카 gemini 활성화: pip install langchain-google-genai + .env GEMINI_API_KEY")
+            return None
+        if s.get("geminiModel"): overrides["GEMINI_MODEL"] = s["geminiModel"]
 
     # langgraph_agent/aibot 은 import 시점에 config 값을 복사하므로 각 모듈에 직접 주입한다.
     for mod in (config, aibot_mod, lga):
@@ -150,7 +163,57 @@ def chat(body: dict, _: bool = Depends(require_token)):
 def investigate(body: dict, _: bool = Depends(require_token)):
     context = body.get("context") or {}
     ssh_target = body.get("sshTarget") or {}
-    return get_agent().run_investigation(context, ssh_target)
+    # 지식베이스 상시 주입 on/off (기본 on). 평가 하네스가 OFF 모드로 대조 측정한다.
+    knowledge_enabled = bool(body.get("knowledge", True))
+    return get_agent().run_investigation(context, ssh_target, knowledge_enabled)
+
+
+@app.get("/ai/knowledge/files")
+def knowledge_list(_: bool = Depends(require_token)):
+    """지식 파일 목록(편집 UI 용). aix/oracle·README 포함, 각 파일 유효성/주입여부 포함."""
+    import knowledge_base as kb
+    return {"files": kb.list_files(),
+            "knowledgeDir": kb.knowledge_dir(),
+            "injectedDomains": list(kb.DEFAULT_DOMAINS)}
+
+
+@app.get("/ai/knowledge/file")
+def knowledge_read(path: str, _: bool = Depends(require_token)):
+    import knowledge_base as kb
+    try:
+        return {"path": path, "content": kb.read_file(path)}
+    except kb.KnowledgeIOError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/ai/knowledge/validate")
+def knowledge_validate(body: dict, _: bool = Depends(require_token)):
+    import knowledge_base as kb
+    ok, err = kb.validate_content(body.get("content", ""))
+    return {"valid": ok, "error": err}
+
+
+@app.post("/ai/knowledge/file")
+def knowledge_save(body: dict, _: bool = Depends(require_token)):
+    """지식 파일 저장(생성/수정). 경로 형식·경로탈출·YAML 검증 통과 시에만 기록."""
+    import knowledge_base as kb
+    path = (body.get("path") or "").strip()
+    content = body.get("content", "")
+    try:
+        kb.save_file(path, content)
+        return {"status": "saved", "path": path}
+    except kb.KnowledgeIOError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.delete("/ai/knowledge/file")
+def knowledge_delete(path: str, _: bool = Depends(require_token)):
+    import knowledge_base as kb
+    try:
+        kb.delete_file(path)
+        return {"status": "deleted", "path": path}
+    except kb.KnowledgeIOError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @app.post("/ai/scan")

@@ -28,7 +28,17 @@ public class ClusterController {
 
     @GetMapping
     public ResponseEntity<List<Cluster>> findAll() {
-        return ResponseEntity.ok(clusterService.findAll());
+        // 각 클러스터에 이중화 노드 구성(역할 포함)을 /status 와 동일한 형태로 채워
+        // 대시보드·클러스터 목록·노드 관리가 같은 소스를 보게 한다(H: 화면별 이중화 불일치 해소).
+        List<Cluster> clusters = clusterService.findAll();
+        clusters.forEach(c -> {
+            try {
+                c.setNodes(nodeService.getClusterStatus(c.getId()).getNodes());
+            } catch (Exception e) {
+                // 노드 조회 실패는 목록 자체를 막지 않는다(빈 노드로 폴백).
+            }
+        });
+        return ResponseEntity.ok(clusters);
     }
 
     @GetMapping("/{id}")

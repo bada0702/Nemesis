@@ -93,8 +93,23 @@ public class Node {
     @Column(name = "created_at", updatable = false)
     private OffsetDateTime createdAt;
 
+    /** 역할 변경 시각(메타데이터 동기화 버전 계산용, MetaVersion). 역할이 바뀌는
+     *  호출부(FailoverOrchestrator 등)에서만 명시적으로 세팅한다 — lastSeenAt처럼
+     *  매 하트비트마다 save되는 필드와 달리 @PreUpdate로 자동 갱신하면 3초마다
+     *  버전이 흘러 메타데이터 동기화가 영원히 DIVERGED로 보이게 된다. */
+    @Column(name = "updated_at")
+    private OffsetDateTime updatedAt;
+
     @PrePersist
     void prePersist() {
         this.createdAt = OffsetDateTime.now();
+        this.updatedAt = OffsetDateTime.now();
+    }
+
+    /** role 변경 + updatedAt 갱신(메타데이터 동기화 버전용). 역할을 바꿀 때는
+     *  setRole() 대신 반드시 이 메서드를 써야 에이전트의 메타 동기화가 새 버전을 인식한다. */
+    public void changeRole(Role role) {
+        this.role = role;
+        this.updatedAt = OffsetDateTime.now();
     }
 }

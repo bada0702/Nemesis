@@ -38,9 +38,16 @@ public class RbacFilter extends OncePerRequestFilter {
         if (need == Need.NONE) { chain.doFilter(req, res); return; }
 
         String auth = req.getHeader("Authorization");
-        if (auth == null || !auth.startsWith("Bearer ")) { deny(res, 401, "인증 필요"); return; }
+        String bearer;
+        if (auth != null && auth.startsWith("Bearer ")) {
+            bearer = auth.substring(7);
+        } else {
+            // 브라우저 EventSource(SSE)는 커스텀 헤더를 못 보내므로 쿼리파라미터 token으로 대체.
+            bearer = req.getParameter("token");
+        }
+        if (bearer == null || bearer.isBlank()) { deny(res, 401, "인증 필요"); return; }
 
-        Optional<TokenService.Principal> p = tokenService.verify(auth.substring(7));
+        Optional<TokenService.Principal> p = tokenService.verify(bearer);
         if (p.isEmpty()) { deny(res, 401, "유효하지 않은 토큰"); return; }
 
         User.Role role = p.get().role();
@@ -66,16 +73,21 @@ public class RbacFilter extends OncePerRequestFilter {
         if (path.equals("/api/auth/login")) return Need.NONE;
         if (path.startsWith("/api/agent/"))  return Need.NONE;
         if (path.startsWith("/actuator"))    return Need.NONE;
+        // aibot 사이드카 LLM 설정 동기화: 사용자 토큰 대신 aibot 공유 토큰을 컨트롤러가 직접 검증.
+        if (path.equals("/api/ai/llm-config")) return Need.NONE;
 
         // 변경(제어) API: 역할 권한 필요
         boolean mutating = "POST".equalsIgnoreCase(method)
                 || "PUT".equalsIgnoreCase(method) || "DELETE".equalsIgnoreCase(method);
         if (mutating) {
             if ("POST".equalsIgnoreCase(method) && path.equals("/api/auth/users")) return Need.ADMIN;
+            if (path.equals("/api/agent-install/keys")) return Need.OPERATOR;  // 에이전트 API 키 발급
             if (path.endsWith("/failover"))                  return Need.OPERATOR;  // POST /api/clusters/{id}/failover
             if (path.endsWith("/vip/apply"))                 return Need.OPERATOR;  // POST /api/clusters/{id}/vip/apply
             if (path.endsWith("/vip/down"))                  return Need.OPERATOR;  // POST /api/clusters/{id}/vip/down
             if (path.matches("/api/ai/proposals/[^/]+/(approve|reject)")) return Need.OPERATOR;
+            if (path.startsWith("/api/ai/knowledge")) return Need.OPERATOR;  // 지식 파일 편집/삭제는 운영자
+
             if (path.matches("/api/clusters/[^/]+/config/snapshots/[^/]+/restore")) return Need.OPERATOR;
             if (path.matches("/api/clusters/[^/]+/config/sync")) return Need.OPERATOR;
             if (path.matches("/api/clusters/[^/]+/sync/jobs.*"))          return Need.OPERATOR; // POST/PUT/DELETE/run

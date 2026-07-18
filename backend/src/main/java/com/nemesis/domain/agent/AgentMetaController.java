@@ -1,6 +1,7 @@
 package com.nemesis.domain.agent;
 
 import com.nemesis.domain.cluster.Cluster;
+import com.nemesis.domain.ha.MetaVersion;
 import com.nemesis.domain.node.Node;
 import com.nemesis.domain.node.NodeRepository;
 import lombok.RequiredArgsConstructor;
@@ -34,8 +35,10 @@ public class AgentMetaController {
                 .orElseThrow(() -> new IllegalStateException("node not found: " + selfNodeId));
         Cluster cluster = self.getCluster();
 
+        List<Node> clusterNodes = nodeRepository.findByClusterId(cluster.getId());
+
         List<Map<String, Object>> peers = new ArrayList<>();
-        for (Node n : nodeRepository.findByClusterId(cluster.getId())) {
+        for (Node n : clusterNodes) {
             if (n.getId().equals(selfNodeId)) continue;
             Map<String, Object> p = new LinkedHashMap<>();
             p.put("nodeId",      n.getId());
@@ -57,6 +60,9 @@ public class AgentMetaController {
         meta.put("vip",         cluster.getVip());
         meta.put("vipCidr",     cluster.getVipCidr());
         meta.put("peers",       peers);
+        // 에이전트가 이 값을 그대로 하트비트에 실어 보내면, 서버는 이 시점의
+        // MetaVersion과 비교해 "실제로 적용된" 메타데이터 동기화 상태를 판정할 수 있다.
+        meta.put("version",     MetaVersion.of(cluster, clusterNodes));
         return ResponseEntity.ok(meta);
     }
 }

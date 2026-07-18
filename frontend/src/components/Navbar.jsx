@@ -1,8 +1,8 @@
-import React, { useEffect, useState } from 'react'
-import { Bell, HelpCircle, User, Menu, LogOut } from 'lucide-react'
+import React, { useEffect, useState, useCallback } from 'react'
+import { Bell, HelpCircle, User, Menu, LogOut, X, Trash2 } from 'lucide-react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth, roleLabel } from '../auth/AuthContext'
-import { getAiNotifications } from '../api/client'
+import { getAiNotifications, deleteAiFinding, rejectAiProposal } from '../api/client'
 
 const PAGE_TITLES = {
   '/':                     { title: '대시보드',      sub: '전체 시스템의 상태를 한눈에 확인합니다.' },
@@ -21,6 +21,7 @@ const PAGE_TITLES = {
   '/inspection':           { title: '점검 관리',     sub: '정기 점검 일정을 관리합니다.' },
   '/reports':              { title: '리포트',        sub: '장애·Failover 이력 및 가동률 통계를 조회합니다.' },
   '/settings/system':      { title: '시스템 설정',   sub: 'Nemesis 환경설정 및 시스템 정보를 관리합니다.' },
+  '/settings/knowledge':   { title: '지식베이스',    sub: 'AI 장애 조사에 주입되는 장애 지식 파일을 편집합니다.' },
   '/settings/agents':      { title: '에이전트 관리', sub: '노드 에이전트 상태를 관리합니다.' },
   '/settings/agents/install': { title: '에이전트 설치', sub: 'SSH로 대상 서버에 Nemesis 에이전트를 원격 설치합니다.' },
   '/alerts':               { title: '알람 현황',     sub: '발생한 알람 목록을 확인합니다.' },
@@ -32,20 +33,35 @@ const DAY_KO = ['일', '월', '화', '수', '목', '금', '토']
 
 export default function Navbar({ onMenuToggle }) {
   const location = useLocation()
-  const { user, logout } = useAuth()
+  const { user, logout, isOperator } = useAuth()
   const [now, setNow] = useState('')
   const [notif, setNotif] = useState({ pending: 0, recent: [], openFindings: 0, recentFindings: [] })
   const [open, setOpen] = useState(false)
+  const [busy, setBusy] = useState(null)   // 처리 중인 항목 id
   const alertCount = (notif.pending ?? 0) + (notif.openFindings ?? 0)
+
+  const loadNotif = useCallback(() => getAiNotifications()
+    .then(r => setNotif(r.data)).catch(() => {}), [])
 
   useEffect(() => {
     let alive = true
-    const load = () => getAiNotifications()
-      .then(r => { if (alive) setNotif(r.data) }).catch(() => {})
+    const load = () => { if (alive) loadNotif() }
     load()
     const id = setInterval(load, 10000)
     return () => { alive = false; clearInterval(id) }
-  }, [])
+  }, [loadNotif])
+
+  // 헤더 알림에서 직접 정리: finding 은 삭제, proposal(제안 대기)은 반려(dismiss).
+  async function removeFinding(id) {
+    setBusy(id)
+    try { await deleteAiFinding(id) } catch { /* 무시 */ }
+    finally { await loadNotif(); setBusy(null) }
+  }
+  async function dismissProposal(id) {
+    setBusy(id)
+    try { await rejectAiProposal(id) } catch { /* 무시 */ }
+    finally { await loadNotif(); setBusy(null) }
+  }
 
   const navigate = useNavigate()
   const page = PAGE_TITLES[location.pathname + location.search]
@@ -97,13 +113,29 @@ export default function Navbar({ onMenuToggle }) {
               <div className="absolute right-0 mt-2 w-72 bg-gray-900 border border-gray-700 rounded-lg shadow-xl z-50 p-2 text-xs">
                 <p className="text-gray-400 px-2 py-1">AI 알림 (제안 대기 {notif.pending} · 열린 이슈 {notif.openFindings ?? 0})</p>
                 {(notif.recentFindings ?? []).map(f => (
-                  <div key={f.id} className="px-2 py-1.5 border-t border-gray-800 text-gray-300">
-                    <span className="text-red-400">[{f.severity}]</span> {f.signalType} — {f.summary}
+                  <div key={f.id} className="group flex items-start gap-1 px-2 py-1.5 border-t border-gray-800 text-gray-300">
+                    <span className="flex-1 min-w-0">
+                      <span className="text-red-400">[{f.severity}]</span> {f.signalType} — {f.summary}
+                    </span>
+                    <button onClick={() => removeFinding(f.id)} disabled={busy === f.id}
+                      title="이 이슈 삭제"
+                      className="shrink-0 p-0.5 text-gray-600 hover:text-red-400 disabled:opacity-40">
+                      <Trash2 size={13} />
+                    </button>
                   </div>
                 ))}
                 {notif.recent.map(n => (
-                  <div key={n.id} className="px-2 py-1.5 border-t border-gray-800 text-gray-300">
-                    <span className="text-amber-400">[{n.status}]</span> {n.triggerReason}
+                  <div key={n.id} className="group flex items-start gap-1 px-2 py-1.5 border-t border-gray-800 text-gray-300">
+                    <span className="flex-1 min-w-0">
+                      <span className="text-amber-400">[{n.status}]</span> {n.triggerReason}
+                    </span>
+                    {n.status === 'PENDING' && (
+                      <button onClick={() => dismissProposal(n.id)} disabled={!isOperator || busy === n.id}
+                        title={isOperator ? '제안 반려(dismiss)' : 'operator 이상 권한이 필요합니다'}
+                        className="shrink-0 p-0.5 text-gray-600 hover:text-amber-400 disabled:opacity-40">
+                        <X size={13} />
+                      </button>
+                    )}
                   </div>
                 ))}
                 {notif.recent.length === 0 && (notif.recentFindings ?? []).length === 0 && (

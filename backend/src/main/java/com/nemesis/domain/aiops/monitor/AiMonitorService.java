@@ -30,9 +30,18 @@ public class AiMonitorService {
 
     public void runScan() {
         Set<String> active = new HashSet<>();
-        scanPass(prefilter.evaluate(), active, AiFinding.REACTIVE);
-        scanPass(predictPrefilter.evaluate(), active, AiFinding.PREDICTIVE);
-        findings.reconcileResolved(active);
+        Set<String> scanned = new HashSet<>();
+        // 두 패스는 시스템 설정 화면에서 독립적으로 on/off 되므로, 이번 틱에 실제로 스캔한
+        // 카테고리만 reconcile 대상으로 넘긴다 — 꺼진 패스의 기존 findings를 오해소하지 않기 위함.
+        if (props.getMonitor().isEnabled()) {
+            scanPass(prefilter.evaluate(), active, AiFinding.REACTIVE);
+            scanned.add(AiFinding.REACTIVE);
+        }
+        if (props.getMonitor().isPredictEnabled()) {
+            scanPass(predictPrefilter.evaluate(), active, AiFinding.PREDICTIVE);
+            scanned.add(AiFinding.PREDICTIVE);
+        }
+        findings.reconcileResolved(active, scanned);
     }
 
     private void scanPass(List<Suspect> suspects, Set<String> active, String category) {

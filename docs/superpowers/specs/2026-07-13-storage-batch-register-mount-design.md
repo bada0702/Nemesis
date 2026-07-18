@@ -83,7 +83,7 @@ fs-create <wwid> <fstype> <mountpoint>
 `nemesis-agent.py`의 `ALLOWED_SCRIPTS`는 안 건드리지만, 스크립트 내용이 바뀌므로
 **에이전트 재배포가 필요**하다.
 
-### DB 마이그레이션 (V23)
+### DB 마이그레이션 (V25 — V23/V24가 이미 다른 용도로 있어 다음 번호로)
 
 `storage_devices`에 컬럼 추가:
 - `mount_path` varchar

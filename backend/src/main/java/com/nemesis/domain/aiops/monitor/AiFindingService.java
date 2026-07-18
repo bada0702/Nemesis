@@ -141,10 +141,12 @@ public class AiFindingService {
         repo.save(f);
     }
 
+    /** scannedCategories에 속한 findings만 reconcile 대상으로 삼는다 —
+     *  이번 틱에 스캔하지 않은(꺼진) 카테고리의 기존 open findings는 건드리지 않는다. */
     @Transactional
-    public void reconcileResolved(Set<String> activeFingerprints) {
+    public void reconcileResolved(Set<String> activeFingerprints, Set<String> scannedCategories) {
         for (AiFinding f : repo.findByStatusOrderByLastSeenAtDesc(AiFinding.OPEN)) {
-            if (!activeFingerprints.contains(f.getFingerprint())) {
+            if (scannedCategories.contains(f.getCategory()) && !activeFingerprints.contains(f.getFingerprint())) {
                 f.setStatus(AiFinding.RESOLVED);
                 f.setResolvedAt(OffsetDateTime.now());
                 repo.save(f);

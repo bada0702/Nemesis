@@ -50,6 +50,11 @@ public class AgentHeartbeatController {
             }
         }
         heartbeatCache.report(fromNodeId, peers);
+
+        // 에이전트가 실제로 적용 완료한 메타데이터 버전(있으면) — 메타데이터 동기화 판정용.
+        if (body.get("appliedMetaVersion") instanceof Number av) {
+            heartbeatCache.reportVersion(fromNodeId, av.longValue());
+        }
         return ResponseEntity.ok().build();
     }
 }

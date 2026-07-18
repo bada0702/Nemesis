@@ -1,0 +1,15 @@
+[Unit]
+Description=Nemesis aibot 사이드카 (FastAPI, /ai/chat|investigate|execute)
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/nemesis-bot
+EnvironmentFile=/opt/nemesis-bot/.env
+ExecStart=/opt/nemesis-bot/venv/bin/python3 -m uvicorn nemesis_service:app --host 0.0.0.0 --port 18900
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

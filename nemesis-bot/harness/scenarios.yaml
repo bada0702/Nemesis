@@ -1,0 +1,107 @@
+# 지식베이스 평가 하네스 시나리오 (T4)
+#
+# held_out: true  → 확장/영업 근거로 사용하는 독립 시나리오(순환 오염 방지 #2).
+#                   지식-저자가 쓴 케이스가 아니어야 한다(변형 표현 또는 실제 오진 사례).
+# held_out 미표기/false → 지식-저자 시나리오. 회귀(regression) 확인용으로만 집계.
+# mock: true → 실 상태와 불일치하는 메트릭 모킹 유형(#5). 품질비교 제외, 주입확인만.
+#
+# 주의: context 는 /ai/investigate 에 그대로 전달된다(조사관이 실 노드를 read-only SSH
+# 조사). 안전 모드(실 재현 없이 컨텍스트만 주입)에서는 sshTarget 이 조사 가능한 노드를
+# 가리켜야 의미 있는 비교가 된다. 실 재현이 필요한 유형은 repro/cleanup 절차를 별도로
+# 운영자가 수행한 뒤 하네스를 돌린다(하네스는 재현을 자동 수행하지 않는다 — 파괴적).
+
+defaults:
+  sshTarget:
+    host: "127.0.0.1"      # 실환경에서 조사 대상 노드로 교체
+    port: 22
+    user: "root"
+  context: {}
+
+scenarios:
+  # ── 지식-저자 시나리오 (회귀 확인용) — 6개 관측 가능 장애 유형 ──────────────
+  - id: process_down_base
+    fault_type: process_down
+    context:
+      faultType: PROCESS_DOWN
+      hostname: bot-01
+      detail: "서비스 프로세스가 응답하지 않음"
+    expected:
+      root_cause_keywords: ["프로세스", "서비스"]
+      action_keywords: ["svc-restart", "재기동"]
+
+  - id: disk_full_base
+    fault_type: disk_full
+    context:
+      faultType: DISK_HIGH
+      hostname: bot-01
+      detail: "디스크 사용률 임계 초과"
+    expected:
+      root_cause_keywords: ["디스크", "공간"]
+      action_keywords: ["정리", "확보"]
+
+  - id: vip_drift_base
+    fault_type: vip_drift
+    context:
+      faultType: VIP_DRIFT
+      hostname: bot-01
+      detail: "서비스 VIP 가 active 노드에 없음"
+    expected:
+      root_cause_keywords: ["vip"]
+      action_keywords: ["vip-up", "garp"]
+
+  - id: dirsync_failure_base
+    fault_type: dirsync_failure
+    context:
+      faultType: DIRSYNC_FAILURE
+      hostname: bot-01
+      detail: "active→standby 디렉토리 동기화 실패"
+    expected:
+      root_cause_keywords: ["동기화", "권한"]
+      action_keywords: ["rsync", "nemesis"]
+
+  - id: failover_failure_base
+    fault_type: failover_failure
+    context:
+      faultType: FAILOVER_FAILURE
+      hostname: bot-01
+      detail: "페일오버 실행이 중간에 실패"
+    expected:
+      root_cause_keywords: ["페일오버", "standby"]
+      action_keywords: ["확인", "동기화"]
+
+  - id: gpfs_state_mock
+    fault_type: gpfs_state
+    mock: true               # 실 GPFS 환경 없이 메트릭 모킹 → 품질비교 제외, 주입확인만
+    context:
+      faultType: GPFS_STATE
+      hostname: bot-01
+      detail: "GPFS 상태 이상(모킹)"
+    expected:
+      root_cause_keywords: ["gpfs", "쿼럼"]
+      action_keywords: ["gpfs-mount", "gpfs-state"]
+
+  # ── HELD-OUT 시나리오 (확장/영업 근거) — 지식 저자가 아닌 관점 ──────────────
+  # (1) 같은 장애 유형이되 증상 표현/맥락을 다르게 서술(정답지 붙이기 방지).
+  - id: held_out_process_variant
+    fault_type: process_down
+    held_out: true
+    context:
+      faultType: PROCESS_DOWN
+      hostname: bot-02
+      detail: "포트는 열려 있으나 헬스체크가 계속 타임아웃, 로그에 OOM 흔적"
+    expected:
+      root_cause_keywords: ["메모리", "oom"]
+      action_keywords: ["재기동", "메모리"]
+
+  # (2) The Assignment 산출물(실제 오진 사례) 기반 — 실측 후 채워 넣을 것.
+  #     아래는 자리표시자. 실제 캡처한 오진 케이스의 context/expected 로 교체한다.
+  - id: held_out_assignment_case_1
+    fault_type: disk_full
+    held_out: true
+    context:
+      faultType: DISK_HIGH
+      hostname: bot-01
+      detail: "PLACEHOLDER — Assignment 로 수집한 실제 오진 장애의 컨텍스트로 교체"
+    expected:
+      root_cause_keywords: ["PLACEHOLDER"]
+      action_keywords: ["PLACEHOLDER"]

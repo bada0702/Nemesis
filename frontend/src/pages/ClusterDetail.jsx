@@ -359,7 +359,9 @@ export default function ClusterDetail() {
           <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" /> Node Status
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {status.nodes.map(node => <NodeStatus key={node.nodeId} node={node} clusterId={id} />)}
+          {/* PRIMARY를 항상 좌측에 고정 (백엔드가 반환하는 노드 순서는 role과 무관) */}
+          {[...status.nodes].sort((a, b) => (a.role === 'PRIMARY' ? -1 : b.role === 'PRIMARY' ? 1 : 0))
+            .map(node => <NodeStatus key={node.nodeId} node={node} clusterId={id} />)}
         </div>
       </div>
     </div>

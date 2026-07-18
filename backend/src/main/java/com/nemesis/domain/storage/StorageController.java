@@ -1,5 +1,7 @@
 package com.nemesis.domain.storage;
 
+import com.nemesis.domain.storage.dto.StorageDtos.BatchItemResult;
+import com.nemesis.domain.storage.dto.StorageDtos.BatchRegisterRequest;
 import com.nemesis.domain.storage.dto.StorageDtos.RegisterDeviceRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -30,6 +32,12 @@ public class StorageController {
     public ResponseEntity<StorageDevice> register(@PathVariable UUID clusterId,
                                                    @RequestBody RegisterDeviceRequest body) {
         return ResponseEntity.ok(storageService.registerDevice(clusterId, body));
+    }
+
+    @PostMapping("/devices/batch")
+    public ResponseEntity<List<BatchItemResult>> registerBatch(@PathVariable UUID clusterId,
+                                                                 @RequestBody BatchRegisterRequest body) {
+        return ResponseEntity.ok(storageService.registerDevicesBatch(clusterId, body));
     }
 
     @DeleteMapping("/devices/{deviceId}")

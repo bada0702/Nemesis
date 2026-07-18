@@ -1,0 +1,29 @@
+# RDF/OWL 지식베이스 전환 스모크 테스트용 (2개 시나리오만, 실 LLM 호출 비용 최소화)
+defaults:
+  sshTarget:
+    host: "127.0.0.1"
+    port: 22
+    user: "root"
+  context: {}
+
+scenarios:
+  - id: gpfs_state_mock
+    fault_type: gpfs_state
+    mock: true
+    context:
+      faultType: GPFS_STATE
+      hostname: bot-01
+      detail: "GPFS 상태 이상(모킹)"
+    expected:
+      root_cause_keywords: ["gpfs", "쿼럼"]
+      action_keywords: ["gpfs-mount", "gpfs-state"]
+
+  - id: process_down_base
+    fault_type: process_down
+    context:
+      faultType: PROCESS_DOWN
+      hostname: bot-01
+      detail: "서비스 프로세스가 응답하지 않음"
+    expected:
+      root_cause_keywords: ["프로세스", "서비스"]
+      action_keywords: ["svc-restart", "재기동"]

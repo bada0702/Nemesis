@@ -29,6 +29,7 @@ public class LlmProperties {
     private Ollama    ollama    = new Ollama();
     private OpenAi    openai    = new OpenAi();
     private Anthropic anthropic = new Anthropic();
+    private Gemini    gemini    = new Gemini();
 
     @Getter @Setter
     public static class Ollama {
@@ -52,5 +53,12 @@ public class LlmProperties {
         private String model    = "claude-haiku-4-5"; // 저지연 장애판단 분류기용 고속·저가 모델
         private String version  = "2023-06-01";
         private int    maxTokens = 1024;
+    }
+
+    @Getter @Setter
+    public static class Gemini {
+        private String apiKey  = "";
+        private String baseUrl = "https://generativelanguage.googleapis.com";
+        private String model   = "gemini-2.0-flash";
     }
 }

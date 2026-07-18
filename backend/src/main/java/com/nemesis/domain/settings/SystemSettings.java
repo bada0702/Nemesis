@@ -43,6 +43,11 @@ public class SystemSettings {
     @Builder.Default
     private boolean aiEnabled = false;
 
+    /** SP5: 추세 기반 장애 예측 스캔 on/off (반응형 능동 모니터링과 별개). */
+    @Column(name = "ai_predict_enabled", nullable = false)
+    @Builder.Default
+    private boolean aiPredictEnabled = false;
+
     @Column(name = "notification_email", length = 500)
     @Builder.Default
     private String notificationEmail = "";
@@ -91,6 +96,15 @@ public class SystemSettings {
     @Builder.Default
     private String llmOpenaiModel = "";
 
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    @Column(name = "llm_gemini_api_key", length = 200)
+    @Builder.Default
+    private String llmGeminiApiKey = "";
+
+    @Column(name = "llm_gemini_model", length = 100)
+    @Builder.Default
+    private String llmGeminiModel = "";
+
     /** 키 노출 없이 설정 여부만 프론트에 전달. */
     @Transient
     public boolean isLlmAnthropicApiKeySet() {
@@ -100,6 +114,11 @@ public class SystemSettings {
     @Transient
     public boolean isLlmOpenaiApiKeySet() {
         return llmOpenaiApiKey != null && !llmOpenaiApiKey.isBlank();
+    }
+
+    @Transient
+    public boolean isLlmGeminiApiKeySet() {
+        return llmGeminiApiKey != null && !llmGeminiApiKey.isBlank();
     }
 
     @Column(name = "updated_at")

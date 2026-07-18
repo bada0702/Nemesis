@@ -2,8 +2,11 @@ package com.nemesis.domain.install;
 
 import com.nemesis.domain.agent.AgentKey;
 import com.nemesis.domain.agent.AgentKeyRepository;
+import com.nemesis.domain.cluster.Cluster;
+import com.nemesis.domain.cluster.ClusterService;
 import com.nemesis.domain.install.dto.*;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -19,6 +22,7 @@ public class AgentInstallController {
 
     private final AgentInstallService installService;
     private final AgentKeyRepository  agentKeyRepository;
+    private final ClusterService      clusterService;
 
     @PostMapping("/test")
     public ResponseEntity<TestConnResult> testConnection(@RequestBody TestConnRequest req) {
@@ -51,5 +55,22 @@ public class AgentInstallController {
                 ))
                 .collect(Collectors.toList());
         return ResponseEntity.ok(keys);
+    }
+
+    /** 클러스터용 신규 에이전트 API 키 발급. */
+    @PostMapping("/keys")
+    public ResponseEntity<Map<String, String>> createKey(@RequestBody Map<String, String> body) {
+        UUID clusterId = UUID.fromString(body.get("clusterId"));
+        Cluster cluster = clusterService.findById(clusterId);
+        String apiKey = "nemesis-agent-" + UUID.randomUUID().toString().replace("-", "");
+
+        AgentKey key = agentKeyRepository.save(AgentKey.builder()
+                .cluster(cluster)
+                .apiKey(apiKey)
+                .build());
+
+        return ResponseEntity.status(HttpStatus.CREATED).body(Map.of(
+                "id",     key.getId().toString(),
+                "apiKey", key.getApiKey()));
     }
 }

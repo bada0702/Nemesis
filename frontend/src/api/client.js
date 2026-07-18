@@ -63,6 +63,8 @@ export const browseNodeDirs    = (cid, nid, path) => client.get(`/clusters/${cid
 export const getStorageDevices     = (cid)          => client.get(`/clusters/${cid}/storage/devices`)
 export const scanStorage           = (cid, nodeId)  => client.post(`/clusters/${cid}/storage/scan`, null, { params: { nodeId } })
 export const registerStorageDevice = (cid, data)    => client.post(`/clusters/${cid}/storage/devices`, data)
+export const registerStorageDevicesBatch = (cid, activeNodeId, items) =>
+  client.post(`/clusters/${cid}/storage/devices/batch`, { activeNodeId, items })
 export const deleteStorageDevice   = (cid, deviceId)=> client.delete(`/clusters/${cid}/storage/devices/${deviceId}`)
 export const controlAppService  = (id, data)     => client.post(`/clusters/${id}/apps/control`, data)
 export const getAiAnalysis      = (id)           => client.get(`/clusters/${id}/ai-analysis`)
@@ -141,7 +143,15 @@ export const triggerAiAnalysis   = (nodeId)        => client.post(`/ai/analyze/$
 export const getAiAnalysisResult = (nodeId)        => client.get(`/ai/analysis/${nodeId}`)
 export const executeAgentCommand = (nodeId, data)  => client.post(`/agent/${nodeId}/execute`, data)
 
+// 지식베이스 편집 (시스템 설정)
+export const getKnowledgeFiles    = ()             => client.get('/ai/knowledge/files')
+export const getKnowledgeFile     = (path)         => client.get('/ai/knowledge/file', { params: { path } })
+export const validateKnowledge    = (content)      => client.post('/ai/knowledge/validate', { content })
+export const saveKnowledgeFile    = (path, content)=> client.post('/ai/knowledge/file', { path, content })
+export const deleteKnowledgeFile  = (path)         => client.delete('/ai/knowledge/file', { params: { path } })
+
 // Agent Install
 export const testAgentInstall    = (data)          => client.post('/agent-install/test', data)
 export const startAgentInstall   = (data)          => client.post('/agent-install/install', data)
 export const getClusterAgentKeys = (clusterId)     => client.get(`/agent-install/keys?clusterId=${clusterId}`)
+export const createAgentKey      = (clusterId)     => client.post('/agent-install/keys', { clusterId })

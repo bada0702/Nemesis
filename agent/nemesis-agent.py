@@ -164,6 +164,21 @@ def save_metadata(meta: dict):
     os.replace(tmp, METADATA_FILE)
 
 
+def pull_and_apply_meta(server_url: str, api_key: str) -> dict | None:
+    """/api/agent/meta를 즉시 1회 pull해 STATE·metadata.json에 반영한다.
+    run_loop의 주기 pull과 커맨드서버의 'meta-pull' 즉시 트리거가 공유한다."""
+    try:
+        meta = _request(f"{server_url}/api/agent/meta",
+                        headers={'Authorization': f'Bearer {api_key}'})
+        if meta:
+            STATE.set_meta(meta)
+            save_metadata(meta)
+        return meta
+    except Exception as e:
+        log.warning(f"메타 pull 실패: {e}")
+        return None
+
+
 # ---------------------------------------------------------------------------
 # Phase D-3: 노드 간 직접 하트비트 + 자율 페일오버
 # 관리 서버가 단절돼도 노드끼리 17000 하트비트로 active 생존을 확인하고,
@@ -255,7 +270,9 @@ def measure_peer(ip: str) -> tuple[str, int | None]:
 
 
 def report_heartbeat(server_url: str, api_key: str):
-    """STATE의 피어 목록을 모두 측정해 관리 서버에 보고(하트비트 매트릭스용)."""
+    """STATE의 피어 목록을 모두 측정해 관리 서버에 보고(하트비트 매트릭스용).
+    적용 완료한 메타 버전(appliedMetaVersion)도 함께 실어, 서버가 메타데이터
+    동기화(IN_SYNC/DIVERGED)를 실제 값으로 판정할 수 있게 한다."""
     meta, _, _ = STATE.snapshot()
     peers = meta.get('peers') or []
     if not peers:
@@ -269,10 +286,13 @@ def report_heartbeat(server_url: str, api_key: str):
         results.append({'toNodeId': node_id, 'status': status, 'latencyMs': latency})
     if not results:
         return
+    body = {'peers': results}
+    if meta.get('version') is not None:
+        body['appliedMetaVersion'] = meta.get('version')
     try:
         _request(
             f"{server_url}/api/agent/heartbeat",
-            data=json.dumps({'peers': results}).encode(),
+            data=json.dumps(body).encode(),
             headers={'Authorization': f'Bearer {api_key}'},
         )
     except Exception as e:
@@ -393,7 +413,7 @@ def execute_command(command: str) -> dict:
     }
 
 
-def make_command_handler(api_key: str):
+def make_command_handler(server_url: str, api_key: str):
     class CommandHandler(BaseHTTPRequestHandler):
         server_version = 'NemesisAgent/1.0'
 
@@ -425,6 +445,19 @@ def make_command_handler(api_key: str):
             except Exception as e:
                 self._send(400, {'error': f'잘못된 요청: {e}'}); return
 
+            # 'meta-pull'은 화이트리스트 스크립트 실행이 아니라, 에이전트가 이미 주기적으로
+            # 수행하는 /api/agent/meta GET을 즉시 1회 앞당겨 실행하는 내부 동작이다.
+            # execute_command/resolve_command(쉘 실행 경로)를 전혀 거치지 않으므로
+            # 화이트리스트를 우회하는 임의 명령 실행 경로가 아니다.
+            if command == 'meta-pull':
+                meta = pull_and_apply_meta(server_url, api_key)
+                if meta is None:
+                    self._send(502, {'error': '메타 pull 실패(관리 서버 응답 없음)'}); return
+                report_heartbeat(server_url, api_key)  # 새 버전을 지체 없이 서버에 반영
+                self._send(200, {'stdout': f"메타 재동기화 완료 (version={meta.get('version')})",
+                                  'stderr': '', 'exitCode': 0})
+                return
+
             try:
                 self._send(200, execute_command(command))
             except ValueError as e:
@@ -439,8 +472,8 @@ def make_command_handler(api_key: str):
     return CommandHandler
 
 
-def start_command_server(api_key: str):
-    server = ThreadingHTTPServer(('0.0.0.0', CONTROL_PORT), make_command_handler(api_key))
+def start_command_server(server_url: str, api_key: str):
+    server = ThreadingHTTPServer(('0.0.0.0', CONTROL_PORT), make_command_handler(server_url, api_key))
     t = threading.Thread(target=server.serve_forever, name='cmd-server', daemon=True)
     t.start()
     log.info(f"명령 수신 서버 시작 (포트 {CONTROL_PORT}, 화이트리스트 {len(set(ALLOWED_SCRIPTS.values()))}종)")
@@ -468,15 +501,8 @@ def run_loop(server_url: str, api_key: str):
 
         # 클러스터 메타(피어/VIP) 동기화 → metadata.json 원자적 갱신(D-4)
         if time.time() - last_pull > PULL_INTERVAL:
-            try:
-                meta = _request(f"{server_url}/api/agent/meta",
-                                headers={'Authorization': f'Bearer {api_key}'})
-                if meta:
-                    STATE.set_meta(meta)
-                    save_metadata(meta)
-                last_pull = time.time()
-            except Exception:
-                pass  # 단절 시 마지막으로 받은 메타로 자율 동작
+            pull_and_apply_meta(server_url, api_key)  # 실패해도 마지막 메타로 자율 동작
+            last_pull = time.time()
 
         time.sleep(PUSH_INTERVAL)
 
@@ -505,16 +531,10 @@ def main():
             log.error(f"등록 실패: {e}")
             sys.exit(1)
         # 초기 클러스터 메타(피어/VIP) 시드 — 자율 페일오버 대비
+        if pull_and_apply_meta(args.server, args.key) is None:
+            log.warning("초기 메타 동기화 실패(계속 진행)")
         try:
-            meta = _request(f"{args.server}/api/agent/meta",
-                            headers={'Authorization': f'Bearer {args.key}'})
-            if meta:
-                STATE.set_meta(meta)
-                save_metadata(meta)
-        except Exception as e:
-            log.warning(f"초기 메타 동기화 실패(계속 진행): {e}")
-        try:
-            start_command_server(args.key)
+            start_command_server(args.server, args.key)
             start_heartbeat_server()
             start_peer_heartbeat()
         except Exception as e:

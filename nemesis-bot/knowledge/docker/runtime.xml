@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+         xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
+         xmlns:owl="http://www.w3.org/2002/07/owl#"
+         xmlns:xsd="http://www.w3.org/2001/XMLSchema#"
+         xmlns:kb="http://nemesis.local/kb#"
+         xml:base="http://nemesis.local/kb#">
+
+  <owl:Class rdf:about="#Fault"/>
+  <owl:Class rdf:about="#Symptom"/>
+  <owl:Class rdf:about="#Cause"/>
+  <owl:Class rdf:about="#DiagnosisStep"/>
+  <owl:Class rdf:about="#Action"/>
+  <owl:Class rdf:about="#Caveat"/>
+
+  <owl:NamedIndividual rdf:about="#Fault_ContainerDown">
+    <rdf:type rdf:resource="#Fault"/>
+    <rdfs:label>컨테이너 런타임 / 프로세스 다운 (Docker)</rdfs:label>
+    <kb:has_fault_type>container_down</kb:has_fault_type>
+    <kb:has_os>linux</kb:has_os>
+    <kb:has_target_sw>docker</kb:has_target_sw>
+    <kb:has_severity>high</kb:has_severity>
+    <kb:related_to rdf:resource="http://nemesis.local/kb#Fault_ProcessDown"/>
+    <kb:has_symptom rdf:resource="#Symptom_ContainerDown_1"/>
+    <kb:has_symptom rdf:resource="#Symptom_ContainerDown_2"/>
+    <kb:has_symptom rdf:resource="#Symptom_ContainerDown_3"/>
+    <kb:has_cause rdf:resource="#Cause_ContainerDown_1"/>
+    <kb:has_cause rdf:resource="#Cause_ContainerDown_2"/>
+    <kb:has_cause rdf:resource="#Cause_ContainerDown_3"/>
+    <kb:has_cause rdf:resource="#Cause_ContainerDown_4"/>
+    <kb:diagnosed_by rdf:resource="#Diagnosis_ContainerDown_1"/>
+    <kb:diagnosed_by rdf:resource="#Diagnosis_ContainerDown_2"/>
+    <kb:diagnosed_by rdf:resource="#Diagnosis_ContainerDown_3"/>
+    <kb:resolved_by rdf:resource="#Action_ContainerDown_1"/>
+    <kb:resolved_by rdf:resource="#Action_ContainerDown_2"/>
+    <kb:resolved_by rdf:resource="#Action_ContainerDown_3"/>
+    <kb:has_caveat rdf:resource="#Caveat_ContainerDown_1"/>
+    <kb:has_caveat rdf:resource="#Caveat_ContainerDown_2"/>
+  </owl:NamedIndividual>
+
+  <owl:NamedIndividual rdf:about="#Symptom_ContainerDown_1">
+    <rdf:type rdf:resource="#Symptom"/>
+    <kb:order rdf:datatype="xsd:integer">1</kb:order>
+    <rdfs:label>컨테이너가 Exited/Restarting 상태, 서비스 무응답.</rdfs:label>
+  </owl:NamedIndividual>
+  <owl:NamedIndividual rdf:about="#Symptom_ContainerDown_2">
+    <rdf:type rdf:resource="#Symptom"/>
+    <kb:order rdf:datatype="xsd:integer">2</kb:order>
+    <rdfs:label>컨테이너 노드(예: bot-02)의 애플리케이션이 죽었는데 svc-* 로 제어 불가.</rdfs:label>
+  </owl:NamedIndividual>
+  <owl:NamedIndividual rdf:about="#Symptom_ContainerDown_3">
+    <rdf:type rdf:resource="#Symptom"/>
+    <kb:order rdf:datatype="xsd:integer">3</kb:order>
+    <rdfs:label>crash loop 로 재시작 반복(systemd Restart=always 와 수동 실행 충돌 등).</rdfs:label>
+  </owl:NamedIndividual>
+
+  <owl:NamedIndividual rdf:about="#Cause_ContainerDown_1">
+    <rdf:type rdf:resource="#Cause"/>
+    <kb:order rdf:datatype="xsd:integer">1</kb:order>
+    <rdfs:label>이미지/설정 오류로 기동 직후 Exit.</rdfs:label>
+  </owl:NamedIndividual>
+  <owl:NamedIndividual rdf:about="#Cause_ContainerDown_2">
+    <rdf:type rdf:resource="#Cause"/>
+    <kb:order rdf:datatype="xsd:integer">2</kb:order>
+    <rdfs:label>호스트 리소스 부족(OOM)으로 컨테이너 kill.</rdfs:label>
+  </owl:NamedIndividual>
+  <owl:NamedIndividual rdf:about="#Cause_ContainerDown_3">
+    <rdf:type rdf:resource="#Cause"/>
+    <kb:order rdf:datatype="xsd:integer">3</kb:order>
+    <rdfs:label>PID 락 충돌: 같은 스크립트를 systemd 와 수동(nohup)으로 동시에 띄우면 락 보유 인스턴스 때문에 다른 쪽이 크래시 루프(예: aibot.pid 충돌).</rdfs:label>
+  </owl:NamedIndividual>
+  <owl:NamedIndividual rdf:about="#Cause_ContainerDown_4">
+    <rdf:type rdf:resource="#Cause"/>
+    <kb:order rdf:datatype="xsd:integer">4</kb:order>
+    <rdfs:label>restart 정책 미설정으로 종료 후 미기동.</rdfs:label>
+  </owl:NamedIndividual>
+
+  <owl:NamedIndividual rdf:about="#Diagnosis_ContainerDown_1">
+    <rdf:type rdf:resource="#DiagnosisStep"/>
+    <kb:order rdf:datatype="xsd:integer">1</kb:order>
+    <kb:has_command>control.sh docker-ps</kb:has_command>
+    <rdfs:label>컨테이너 상태(Up/Exited/Restarting) 확인.</rdfs:label>
+  </owl:NamedIndividual>
+  <owl:NamedIndividual rdf:about="#Diagnosis_ContainerDown_2">
+    <rdf:type rdf:resource="#DiagnosisStep"/>
+    <kb:order rdf:datatype="xsd:integer">2</kb:order>
+    <kb:has_command>control.sh docker-images</kb:has_command>
+    <rdfs:label>이미지 존재/태그 확인.</rdfs:label>
+  </owl:NamedIndividual>
+  <owl:NamedIndividual rdf:about="#Diagnosis_ContainerDown_3">
+    <rdf:type rdf:resource="#DiagnosisStep"/>
+    <kb:order rdf:datatype="xsd:integer">3</kb:order>
+    <rdfs:label>crash loop 이면 재시작 횟수/최근 종료 로그 확인.</rdfs:label>
+  </owl:NamedIndividual>
+
+  <owl:NamedIndividual rdf:about="#Action_ContainerDown_1">
+    <rdf:type rdf:resource="#Action"/>
+    <kb:order rdf:datatype="xsd:integer">1</kb:order>
+    <kb:has_risk>MEDIUM</kb:has_risk>
+    <rdfs:label>컨테이너 노드는 systemd 부재 → svc-* 재기동 불가. docker 명령/오케스트레이션으로 처리.</rdfs:label>
+  </owl:NamedIndividual>
+  <owl:NamedIndividual rdf:about="#Action_ContainerDown_2">
+    <rdf:type rdf:resource="#Action"/>
+    <kb:order rdf:datatype="xsd:integer">2</kb:order>
+    <kb:has_risk>LOW</kb:has_risk>
+    <rdfs:label>crash loop 은 재기동 전에 원인(이미지/설정/PID 락)부터 제거.</rdfs:label>
+  </owl:NamedIndividual>
+  <owl:NamedIndividual rdf:about="#Action_ContainerDown_3">
+    <rdf:type rdf:resource="#Action"/>
+    <kb:order rdf:datatype="xsd:integer">3</kb:order>
+    <kb:has_risk>LOW</kb:has_risk>
+    <rdfs:label>프론트가 grey 폴백을 그리는 등 깨진 것처럼 보이면 배포 드리프트(백엔드 컨테이너 미재빌드) 가능성 확인.</rdfs:label>
+  </owl:NamedIndividual>
+
+  <owl:NamedIndividual rdf:about="#Caveat_ContainerDown_1">
+    <rdf:type rdf:resource="#Caveat"/>
+    <kb:order rdf:datatype="xsd:integer">1</kb:order>
+    <rdfs:label>컨테이너 노드는 서비스 매니저가 없어 호스트 노드와 조치 경로가 다르다.</rdfs:label>
+  </owl:NamedIndividual>
+  <owl:NamedIndividual rdf:about="#Caveat_ContainerDown_2">
+    <rdf:type rdf:resource="#Caveat"/>
+    <kb:order rdf:datatype="xsd:integer">2</kb:order>
+    <rdfs:label>같은 스크립트를 systemd 와 수동으로 동시에 기동하지 말 것(PID 락 크래시 루프).</rdfs:label>
+  </owl:NamedIndividual>
+
+</rdf:RDF>

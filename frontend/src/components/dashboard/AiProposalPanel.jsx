@@ -8,6 +8,7 @@ const RISK_CLS = {
   MEDIUM: 'text-yellow-400 bg-yellow-500/10 border-yellow-500/20',
   LOW:    'text-green-400 bg-green-500/10 border-green-500/20',
 }
+const fmt = (w) => (w ? new Date(w).toLocaleString('ko-KR') : '—')
 
 // 승인·실행 결과를 사람이 읽을 수 있는 한 줄로 정리(승인 후 결과가 안 보이던 문제 보완).
 function execResultText(p) {
@@ -101,6 +102,9 @@ export default function AiProposalPanel({ className = '' }) {
               </div>
               {p.diagnosis && <p className="text-gray-300 mb-1 leading-snug">{p.diagnosis}</p>}
               {p.rootCause && <p className="text-[11px] text-gray-400 mb-2">근본원인: {p.rootCause}</p>}
+              <p className="text-[10px] text-gray-500 mb-2">
+                발생: {fmt(p.createdAt)}{p.decidedAt ? ` · 처리: ${fmt(p.decidedAt)}` : ''}
+              </p>
               {actions.length > 0 && (
                 <div className="space-y-1 mb-2">
                   {actions.map((a, i) => (

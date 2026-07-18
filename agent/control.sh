@@ -252,12 +252,18 @@ docker_images() {
 # ----------------------------------------------------------------------------
 # Phase: 폴더 동기화(dir-sync)
 # ----------------------------------------------------------------------------
-# rsync 전용 SSH 계정. install.sh가 보장(없으면 root 홈 폴백).
+# rsync 전용 SSH 계정. 시스템에 없으면(설치 스크립트가 만들지 않음) 현재 계정으로 폴백—
+# 키 생성/authorized_keys뿐 아니라 실제 rsync 접속 계정도 반드시 동일해야 한다.
 SYNC_USER=${NEMESIS_SYNC_USER:-nemesis}
 
+_sync_user() {
+  id "$SYNC_USER" >/dev/null 2>&1 && echo "$SYNC_USER" || id -un
+}
+
 _sync_home() {
-  h=$(eval echo "~${SYNC_USER}" 2>/dev/null)
-  case "$h" in ~*|"") h="/home/${SYNC_USER}" ;; esac
+  u=$(_sync_user)
+  h=$(eval echo "~${u}" 2>/dev/null)
+  case "$h" in ~*|"") h="/home/${u}" ;; esac
   [ -d "$h" ] || h=$(eval echo ~ 2>/dev/null)
   echo "$h"
 }
@@ -286,7 +292,7 @@ dir_sync() {
   done
   ssh_opts="ssh -o StrictHostKeyChecking=accept-new -o BatchMode=yes -o ConnectTimeout=10"
   # shellcheck disable=SC2086
-  out=$(rsync $flags -e "$ssh_opts" "$src/" "${SYNC_USER}@${dest_ip}:${dst}/" 2>&1) \
+  out=$(rsync $flags -e "$ssh_opts" "$src/" "$(_sync_user)@${dest_ip}:${dst}/" 2>&1) \
     || { log "rsync 실패: $out"; exit 1; }
   files=$(printf '%s\n' "$out" | sed -n 's/^Number of regular files transferred: *//p' | tr -d ', ')
   bytes=$(printf '%s\n' "$out" | sed -n 's/^Total transferred file size: *//p' | sed 's/ bytes//' | tr -d ', ')
@@ -300,7 +306,7 @@ ssh_keygen_nemesis() {
   mkdir -p "$d"; chmod 700 "$d"
   key="$d/id_ed25519"
   [ -f "$key" ] || ssh-keygen -t ed25519 -N "" -f "$key" -q || die "키 생성 실패"
-  chown -R "${SYNC_USER}" "$d" 2>/dev/null || true
+  chown -R "$(_sync_user)" "$d" 2>/dev/null || true
   cat "${key}.pub" || die "공개키 읽기 실패"
 }
 
@@ -311,7 +317,7 @@ ssh_authorize() {
   mkdir -p "$d"; chmod 700 "$d"
   ak="$d/authorized_keys"; touch "$ak"; chmod 600 "$ak"
   grep -qF "$pub" "$ak" || echo "$pub" >> "$ak"
-  chown -R "${SYNC_USER}" "$d" 2>/dev/null || true
+  chown -R "$(_sync_user)" "$d" 2>/dev/null || true
   log "authorized"; exit 0
 }
 

@@ -1,10 +1,43 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Terminal, CheckCircle, XCircle, Loader, ChevronRight, ArrowLeft } from 'lucide-react'
-import { getClusters, testAgentInstall, startAgentInstall, getClusterAgentKeys } from '../../api/client'
+import { getClusters, testAgentInstall, startAgentInstall, getClusterAgentKeys, createAgentKey } from '../../api/client'
 import { getToken } from '../../api/token'
 
 const inputCls = "w-full px-3 py-2 rounded-lg text-xs bg-gray-900 border border-gray-700 text-white outline-none focus:border-blue-500"
+
+// 설치 단계별 대략적 진행률 — 백엔드 emit() 문구와 매칭
+const INSTALL_STAGES = [
+  { match: 'SSH 연결 중',          pct: 10 },
+  { match: 'SSH 연결 완료',        pct: 20 },
+  { match: '원격 디렉토리 생성',   pct: 30 },
+  { match: 'install.sh 실행 중',   pct: 50 },
+  { match: '에이전트 시작 중',     pct: 80 },
+  { match: '관리서버 등록 확인 중', pct: 90 },
+]
+
+// crypto.randomUUID()는 보안 컨텍스트(HTTPS/localhost) 전용이라 평문 HTTP(:18090 등)에서
+// undefined라 TypeError가 난다. getRandomValues는 제약이 없어 폴백으로 사용한다.
+function genJobId() {
+  if (typeof crypto.randomUUID === 'function') return crypto.randomUUID()
+  const b = crypto.getRandomValues(new Uint8Array(16))
+  b[6] = (b[6] & 0x0f) | 0x40
+  b[8] = (b[8] & 0x3f) | 0x80
+  const h = [...b].map(x => x.toString(16).padStart(2, '0')).join('')
+  return `${h.slice(0,8)}-${h.slice(8,12)}-${h.slice(12,16)}-${h.slice(16,20)}-${h.slice(20)}`
+}
+
+function installProgress(logs, status) {
+  if (status === 'done') return 100
+  if (status === 'idle') return 0
+  let pct = logs.length > 0 ? 5 : 0
+  for (const line of logs) {
+    for (const stage of INSTALL_STAGES) {
+      if (line.includes(stage.match)) pct = Math.max(pct, stage.pct)
+    }
+  }
+  return pct
+}
 
 // ─── Step 1: 서버 정보 ──────────────────────────────────────────────────────
 function StepServerInfo({ form, setForm, clusters, onNext }) {
@@ -103,7 +136,7 @@ function StepConnTest({ form, onNext, onBack }) {
       })
       setResult(r.data)
     } catch (e) {
-      setResult({ sshOk: false, sshError: e.message, port17001Ok: false, peerChecks: [] })
+      setResult({ sshOk: false, sshError: e.message, peerChecks: [] })
     } finally {
       setState('done')
     }
@@ -111,7 +144,6 @@ function StepConnTest({ form, onNext, onBack }) {
 
   const allOk = result &&
     result.sshOk &&
-    result.port17001Ok &&
     (result.peerChecks ?? []).every(p => p.reachable)
 
   return (
@@ -120,7 +152,7 @@ function StepConnTest({ form, onNext, onBack }) {
 
       {state === 'idle' && (
         <div className="rounded-xl border border-gray-800 p-6 text-center space-y-3">
-          <p className="text-xs text-gray-400">SSH 연결, 명령 채널(17001), 핫비트(17000) 통신을 일괄 확인합니다.</p>
+          <p className="text-xs text-gray-400">SSH 연결과 기존 클러스터 노드와의 핫비트(17000) 통신을 일괄 확인합니다.</p>
           <button onClick={runTest}
             className="px-6 py-2.5 rounded-lg bg-blue-600 text-white text-xs font-bold hover:bg-blue-700">
             연결 검증 시작
@@ -131,7 +163,6 @@ function StepConnTest({ form, onNext, onBack }) {
       {state === 'testing' && !result && (
         <div className="rounded-xl border border-gray-800 p-5 space-y-1">
           <CheckRow label={`SSH 접속 (${form.host}:${form.sshPort})`} ok={false} pending />
-          <CheckRow label="관리서버 → 대상 17001 (명령 채널)" ok={false} pending />
         </div>
       )}
 
@@ -139,8 +170,6 @@ function StepConnTest({ form, onNext, onBack }) {
         <div className="rounded-xl border border-gray-800 p-5 space-y-0">
           <CheckRow label={`SSH 접속 (${form.host}:${form.sshPort})`}
             ok={result.sshOk} error={result.sshError} pending={false} />
-          <CheckRow label="관리서버 → 대상 17001 (명령 채널)"
-            ok={result.port17001Ok} error={result.port17001Error} pending={false} />
           {(result.peerChecks ?? []).map(p => (
             <CheckRow key={p.nodeHostname}
               label={`${form.host} → ${p.nodeHostname} (${p.heartbeatIp}:17000) 핫비트`}
@@ -183,6 +212,7 @@ function StepInstall({ form, onBack }) {
   const navigate = useNavigate()
   const [keys,    setKeys]   = useState([])
   const [apiKey,  setApiKey] = useState('')
+  const [issuing, setIssuing]= useState(false)
   const [logs,    setLogs]   = useState([])
   const [status,  setStatus] = useState('idle')
   const logRef  = useRef(null)
@@ -195,6 +225,20 @@ function StepInstall({ form, onBack }) {
       .catch(() => {})
   }, [form.clusterId])
 
+  async function handleIssueKey() {
+    setIssuing(true)
+    try {
+      const { data } = await createAgentKey(form.clusterId)
+      const { data: refreshed } = await getClusterAgentKeys(form.clusterId)
+      setKeys(refreshed)
+      setApiKey(data.apiKey)
+    } catch (e) {
+      alert('키 발급 실패: ' + (e.response?.data?.error ?? e.message))
+    } finally {
+      setIssuing(false)
+    }
+  }
+
   useEffect(() => {
     if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight
   }, [logs])
@@ -202,7 +246,7 @@ function StepInstall({ form, onBack }) {
   useEffect(() => () => { if (esRef.current) esRef.current.close() }, [])
 
   async function runInstall() {
-    const jobId = crypto.randomUUID()
+    const jobId = genJobId()
     setLogs([])
     setStatus('running')
 
@@ -217,7 +261,11 @@ function StepInstall({ form, onBack }) {
     }
     es.onerror = () => {
       es.close()
-      setStatus(s => s === 'running' ? 'error' : s)
+      setStatus(s => {
+        if (s !== 'running') return s
+        setLogs(prev => [...prev, '[ERROR] 진행 로그 스트림 연결 실패 — 네트워크 상태를 확인하세요'])
+        return 'error'
+      })
     }
 
     try {
@@ -254,16 +302,24 @@ function StepInstall({ form, onBack }) {
         <div className="rounded-xl border border-gray-800 p-5 space-y-4">
           <div>
             <label className="block text-[10px] text-gray-500 uppercase mb-1">에이전트 API 키</label>
-            {keys.length > 0 ? (
-              <select value={apiKey} onChange={e => setApiKey(e.target.value)} className={inputCls}>
-                {keys.map(k => (
-                  <option key={k.id} value={k.apiKey}>{k.label} — {k.apiKey.slice(0, 12)}…</option>
-                ))}
-              </select>
-            ) : (
-              <input value={apiKey} onChange={e => setApiKey(e.target.value)}
-                placeholder="API 키를 직접 입력" className={inputCls} />
-            )}
+            <div className="flex gap-2">
+              <div className="flex-1">
+                {keys.length > 0 ? (
+                  <select value={apiKey} onChange={e => setApiKey(e.target.value)} className={inputCls}>
+                    {keys.map(k => (
+                      <option key={k.id} value={k.apiKey}>{k.label} — {k.apiKey.slice(0, 12)}…</option>
+                    ))}
+                  </select>
+                ) : (
+                  <input value={apiKey} onChange={e => setApiKey(e.target.value)}
+                    placeholder="API 키를 직접 입력" className={inputCls} />
+                )}
+              </div>
+              <button type="button" onClick={handleIssueKey} disabled={issuing || !form.clusterId}
+                className="px-3 py-2 rounded-lg text-xs bg-gray-800 border border-gray-700 text-white hover:bg-gray-700 disabled:opacity-50 whitespace-nowrap">
+                {issuing ? '발급 중...' : '새 키 발급'}
+              </button>
+            </div>
           </div>
           <div className="rounded-lg bg-gray-900/60 p-3 text-xs text-gray-500 space-y-1">
             <p>• 대상: <span className="text-white font-mono">{form.host}</span></p>
@@ -275,11 +331,35 @@ function StepInstall({ form, onBack }) {
         </div>
       )}
 
-      {logs.length > 0 && (
+      {(status === 'running' || status === 'error' || logs.length > 0) && (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between text-[10px] text-gray-500">
+            <span>
+              {status === 'running' ? '설치 진행 중...' :
+               status === 'error'   ? '설치 실패' :
+               status === 'done'    ? '설치 완료' : ''}
+            </span>
+            <span>{installProgress(logs, status)}%</span>
+          </div>
+          <div className="h-1.5 rounded-full bg-gray-800 overflow-hidden">
+            <div
+              className={`h-full transition-all duration-500 ${status === 'error' ? 'bg-red-500' : 'bg-blue-500'}`}
+              style={{ width: `${installProgress(logs, status)}%` }}
+            />
+          </div>
+        </div>
+      )}
+
+      {(status === 'running' || logs.length > 0) && (
         <div ref={logRef}
           className="bg-gray-950 border border-gray-800 rounded-xl p-4 h-64 overflow-y-auto font-mono text-xs space-y-0.5">
+          {logs.length === 0 && (
+            <div className="flex items-center gap-2 text-gray-500">
+              <Loader className="w-3 h-3 animate-spin" /> 설치 준비 중...
+            </div>
+          )}
           {logs.map((l, i) => <div key={i} className={lineColor(l)}>{l}</div>)}
-          {status === 'running' && (
+          {status === 'running' && logs.length > 0 && (
             <div className="flex items-center gap-2 text-gray-600 mt-1">
               <Loader className="w-3 h-3 animate-spin" /> 실행 중...
             </div>

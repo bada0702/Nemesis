@@ -92,7 +92,7 @@ public class HealthMonitorService {
         if (node.getRole() == Node.Role.fault) {
             // 복구 감지: 다시 신선하게 보고하기 시작하면 standby로 되돌린다(승격은 Phase B).
             if (everSeen && !stale) {
-                node.setRole(Node.Role.standby);
+                node.changeRole(Node.Role.standby);
                 nodeRepository.save(node);
                 clearNodeState(nodeId);
                 record(node, DetectionEvent.Type.NODE_RECOVERED, DetectionEvent.Severity.INFO,
@@ -127,7 +127,7 @@ public class HealthMonitorService {
 
             DetectionEvent.Severity sev = prev == Node.Role.active
                     ? DetectionEvent.Severity.CRITICAL : DetectionEvent.Severity.WARNING;
-            node.setRole(Node.Role.fault);
+            node.changeRole(Node.Role.fault);
             nodeRepository.save(node);
             clearNodeState(nodeId);
             metricsCache.remove(nodeId);

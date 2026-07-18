@@ -51,6 +51,12 @@ public class StorageDevice {
     @Column(name = "discovered_node_id")
     private UUID discoveredNodeId;
 
+    @Column(name = "mount_path")
+    private String mountPath;
+
+    @Column(length = 20)
+    private String fstype;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     @Builder.Default

@@ -33,8 +33,8 @@ export function LogoFull() {
       <LogoMark className="w-9 h-9 shrink-0" />
       <div className="leading-none">
         <h1 className="text-xl font-black tracking-tight text-white">NEMESIS</h1>
-        <p className="text-[8px] font-semibold tracking-[0.22em] text-sky-400/80 mt-1.5 uppercase whitespace-nowrap">
-          Next Generation Smart HA
+        <p className="text-[8px] font-semibold tracking-[0.22em] text-sky-400/80 mt-1.5 uppercase">
+          Autonomous Server HA
         </p>
       </div>
     </div>

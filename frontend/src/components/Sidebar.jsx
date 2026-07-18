@@ -18,8 +18,6 @@ const MENU = [
   { label: '클러스터', icon: GitBranch, path: null, children: [
     { label: '클러스터 목록', path: '/ha/groups'         },
     { label: '공유 스토리지', path: '/storage'           },
-    { label: '서버 현황',    path: '/servers/list'       },
-    { label: '트리 뷰',      path: '/clusters/tree'      },
     { label: '클러스터 설정', path: '/settings/clusters' },
     { label: 'HA 운영 절차', path: '/ha/sequence'       },
   ]},
@@ -39,6 +37,7 @@ const MENU = [
 
   { label: '시스템', icon: Settings, path: null, children: [
     { label: '시스템 설정',  path: '/settings/system'          },
+    { label: '지식베이스',    path: '/settings/knowledge'       },
     { label: '에이전트 설치', path: '/settings/agents/install' },
   ]},
 ]

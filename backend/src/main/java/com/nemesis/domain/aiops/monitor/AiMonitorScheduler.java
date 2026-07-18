@@ -18,7 +18,7 @@ public class AiMonitorScheduler {
 
     @Scheduled(fixedDelayString = "${nemesis.aiops.monitor.interval-ms:300000}")
     public void tick() {
-        if (!props.getMonitor().isEnabled()) return;
+        if (!props.getMonitor().isEnabled() && !props.getMonitor().isPredictEnabled()) return;
         try { svc.runScan(); }
         catch (Exception e) { log.warn("능동 스캔 실패: {}", e.getMessage()); }
     }

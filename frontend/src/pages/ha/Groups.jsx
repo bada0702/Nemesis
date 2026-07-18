@@ -1,20 +1,17 @@
 import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Server, Zap, RefreshCw, Bot, WifiOff, Activity, Heart, Database, Network, Save, RotateCcw, Trash2, X } from 'lucide-react'
+import { Server, Zap, RefreshCw, Bot, WifiOff, Heart, Database, Network, Save, RotateCcw, Trash2, X } from 'lucide-react'
 import {
-  getClusters, getClusterStatus, getClusterNodes, triggerFailover,
+  getClusters, getClusterStatus, triggerFailover,
   backupClusterConfig, getConfigSnapshots, restoreConfigSnapshot, deleteConfigSnapshot, syncClusterConfig,
 } from '../../api/client'
 import { useAuth } from '../../auth/AuthContext'
-import { statusBadge, dot } from '../../lib/utils'
-import { ReplicationTab, HeartbeatTab, MetadataSyncTab, AgentStatusTab } from '../monitoring/ClusterStatus'
+import { HeartbeatTab, MetadataSyncTab } from '../monitoring/ClusterStatus'
 
 const STATUS_TABS = [
   { key: 'overview',    label: '개요',            icon: Network  },
-  { key: 'replication', label: '복제 현황',        icon: Activity },
   { key: 'heartbeat',   label: '하트비트 현황',    icon: Heart    },
   { key: 'metadata',    label: '메타데이터 동기화', icon: Database },
-  { key: 'agents',      label: '에이전트',          icon: Server   },
 ]
 
 const ROLE_BADGE = {
@@ -47,11 +44,14 @@ function UsageMini({ label, pct }) {
 
 // 노드 컬럼 카드: 노드 정보(역할·자원) + 그 노드의 서비스 목록 + 에이전트 상태.
 // 이중화 비교를 위해 좌우로 나란히 배치한다.
-function NodeCard({ node }) {
+function NodeCard({ node, listStale }) {
   const procs   = node.metrics?.processes ?? []
   const running = procs.filter(p => p.status === 'running').length
   const agentUp = node.lastSeenAt != null && (Date.now() - new Date(node.lastSeenAt).getTime()) < 30_000
-  const down    = node.state === 'STOPPED' || node.role === 'FAULT'
+  // 목록 자체를 최근에 못 가져왔으면(외부망 지연 등) 화면의 lastSeenAt이 낡은 것뿐일 수 있다 —
+  // 이 경우 "offline"으로 단정하지 않고 "확인 지연"으로 구분 표시한다.
+  const unknown = listStale && !agentUp
+  const down    = node.role === 'FAULT'
   const toneIcon = down ? 'text-red-400'
     : node.role === 'PRIMARY' ? 'text-sky-400'
     : node.role === 'RECOVERING' ? 'text-amber-400' : 'text-emerald-400'
@@ -125,8 +125,8 @@ function NodeCard({ node }) {
           <div className="flex items-center gap-2 border-t border-gray-800/50 pt-1.5 mt-1">
             <Bot className="w-3.5 h-3.5 text-indigo-400/70 shrink-0" />
             <span className="text-[12px] text-gray-400">Nemesis Agent</span>
-            <span className={`ml-auto text-[10px] font-mono font-bold ${agentUp ? 'text-emerald-400' : 'text-red-400'}`}>
-              {agentUp ? 'connected' : 'offline'}
+            <span className={`ml-auto text-[10px] font-mono font-bold ${agentUp ? 'text-emerald-400' : unknown ? 'text-gray-400' : 'text-red-400'}`}>
+              {agentUp ? 'connected' : unknown ? '확인 지연' : 'offline'}
             </span>
           </div>
         </div>
@@ -196,12 +196,11 @@ function SnapshotModal({ cluster, isOperator, onClose, onAfter }) {
 
 export default function HaGroups() {
   const [clusters, setClusters]     = useState([])   // statuses (nodes 포함)
-  const [rawClusters, setRawClusters] = useState([]) // getClusters 원본(에이전트 탭용)
-  const [nodeMap, setNodeMap]       = useState({})   // clusterId → nodes(에이전트 탭용)
   const [loading, setLoading]       = useState(true)
   const [failing, setFailing]       = useState(null) // 진행 중인 clusterId
   const [tab, setTab]               = useState('overview')
   const [snapCluster, setSnapCluster] = useState(null)   // 스냅샷 모달 대상
+  const [lastOkAt, setLastOkAt]     = useState(null)     // 목록 조회 마지막 성공 시각
   const navigate = useNavigate()
   const { isOperator } = useAuth()
 
@@ -241,23 +240,29 @@ export default function HaGroups() {
     setLoading(true)
     try {
       const listRes = await getClusters()
-      setRawClusters(listRes.data)
       const statuses = await Promise.all(
-        listRes.data.map(c => getClusterStatus(c.id).then(r => r.data).catch(() => ({ clusterId: c.id, clusterName: c.name, vip: c.vip, nodes: [] })))
+        listRes.data.map(c => getClusterStatus(c.id).then(r => r.data)
+          // 조회 실패(타임아웃 등)를 "노드 0개"로 위장하면 실제로는 멀쩡한 노드가 오프라인/동기화
+          // 끊김으로 오인 표시된다(외부망처럼 지연 큰 경로에서 특히 잦음). statusError로 구분해
+          // "조회 실패"를 노드 다운과 별개로 렌더링한다.
+          .catch(() => ({ clusterId: c.id, clusterName: c.name, vip: c.vip, nodes: [], statusError: true })))
       )
       setClusters(statuses)
-      // 에이전트 탭용 nodeMap
-      const m = {}
-      await Promise.all(listRes.data.map(async c => {
-        try { const r = await getClusterNodes(c.id); m[c.id] = r.data } catch { m[c.id] = [] }
-      }))
-      setNodeMap(m)
+      setLastOkAt(Date.now())
+    } catch (e) {
+      // 목록 조회 자체가 실패(네트워크 지연/타임아웃) — 기존 화면은 유지한다. 여기서 아무
+      // 표시도 안 하면 시간이 지날수록 화면에 남은 lastSeenAt만 낡아가며 거짓 offline으로
+      // 보인다(지연 큰 외부망에서 특히 잦음). lastOkAt 을 갱신하지 않아 listStale 로 노출한다.
+      console.warn('클러스터 목록 조회 실패:', e)
     } finally { setLoading(false) }
   }
 
   useEffect(() => { load(); const iv = setInterval(load, 8000); return () => clearInterval(iv) }, [])
 
-  const healthy = clusters.filter(c => !c.nodes?.some(n => n.role === 'FAULT' || n.state === 'STOPPED')).length
+  const healthy = clusters.filter(c => !c.statusError && !c.nodes?.some(n => n.role === 'FAULT')).length
+  // 목록 조회가 최근(폴링 2회 이상, 20초) 성공하지 못했으면 화면 데이터는 낡았을 수 있다 —
+  // 이 경우 agentUp=false 를 "offline" 대신 "확인 지연"으로 표시해 오탐을 피한다.
+  const listStale = lastOkAt != null && (Date.now() - lastOkAt) > 20_000
 
   return (
     <div className="p-8 pt-0 space-y-6">
@@ -271,7 +276,14 @@ export default function HaGroups() {
         </button>
       </div>
 
-      {/* 탭: 개요 + 클러스터 상태(복제/하트비트/메타데이터/에이전트) */}
+      {listStale && (
+        <div className="flex items-center gap-2 bg-gray-800/60 border border-gray-700 rounded-lg px-3 py-2 text-xs text-gray-400">
+          <WifiOff className="w-3.5 h-3.5 shrink-0" />
+          최신 상태 조회가 지연되고 있습니다(네트워크 지연/타임아웃) — 아래 값은 마지막 확인 시점 기준이며, 실제 노드가 다운된 것과는 다를 수 있습니다.
+        </div>
+      )}
+
+      {/* 탭: 개요 + 클러스터 상태(하트비트/메타데이터) */}
       <div className="flex gap-2 border-b border-gray-800 overflow-x-auto">
         {STATUS_TABS.map(t => {
           const Icon = t.icon
@@ -306,14 +318,19 @@ export default function HaGroups() {
           {clusters.map(c => {
             const primary = c.nodes?.find(n => n.role === 'PRIMARY') ?? null
             const standby = c.nodes?.find(n => n.role === 'STANDBY') ?? null
-            const hasFault = c.nodes?.some(n => n.role === 'FAULT' || n.state === 'STOPPED')
+            const hasFault = !c.statusError && c.nodes?.some(n => n.role === 'FAULT')
             return (
               <div key={c.clusterId} className="card-bg rounded-xl p-6">
                 <div className="flex items-center justify-between mb-5">
                   <div className="flex items-center gap-3">
-                    <div className={`w-2 h-2 rounded-full ${hasFault ? 'bg-red-400' : 'bg-green-400'}`} />
+                    <div className={`w-2 h-2 rounded-full ${c.statusError ? 'bg-gray-500' : hasFault ? 'bg-red-400' : 'bg-green-400'}`} />
                     <span className="font-bold text-white">{c.clusterName}</span>
                     <span className="text-xs text-gray-500">VIP: {c.vip || '—'}</span>
+                    {c.statusError && (
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-700/60 text-gray-400" title="상태 조회 요청이 실패했습니다(네트워크 지연/타임아웃). 노드가 실제로 다운된 것과는 다릅니다.">
+                        상태 조회 실패 — 재시도 중
+                      </span>
+                    )}
                   </div>
                   <div className="flex gap-2 flex-wrap">
                     <button onClick={() => navigate(`/cluster/${c.clusterId}`)}
@@ -348,37 +365,42 @@ export default function HaGroups() {
                 </div>
 
                 {/* 이중화 모습: 노드를 좌우로 나란히, 각 노드 카드 안에 서비스 목록 */}
-                {(c.nodes?.length ?? 0) === 0 ? (
+                {c.statusError ? (
+                  <p className="text-xs text-gray-500 py-2">노드 상태를 불러오지 못했습니다(네트워크 지연/타임아웃) — 실제 노드 다운 여부는 알 수 없습니다. 새로고침해 재시도하세요.</p>
+                ) : (c.nodes?.length ?? 0) === 0 ? (
                   <p className="text-xs text-gray-600 py-2">등록된 노드가 없습니다.</p>
                 ) : (c.nodes?.length ?? 0) === 2 ? (
                   // 2노드 이중화 — PRIMARY 좌측 고정, 가운데에 실시간 동기화 표시
                   (() => {
                     const [a, b] = orderNodes(c.nodes)   // PRIMARY가 항상 왼쪽
-                    const synced = agentUp(a) && agentUp(b) && !hasFault
+                    const bothUp = agentUp(a) && agentUp(b)
+                    const synced = bothUp && !hasFault
+                    // 목록 조회가 지연 중이면 "동기화 끊김"으로 단정하지 않고 "확인 지연"으로 구분.
+                    const unknownSync = listStale && !bothUp
                     return (
                       <div className="flex items-stretch gap-2">
-                        <div className="flex-1"><NodeCard node={a} /></div>
+                        <div className="flex-1"><NodeCard node={a} listStale={listStale} /></div>
                         <div className="relative flex items-center justify-center w-28 shrink-0">
                           {/* 연결 트랙: 동기화면 그라데이션, 끊기면 빨강 점선 */}
-                          <div className={`absolute left-0 right-0 h-0.5 ${synced ? 'bg-gradient-to-r from-sky-500/50 via-emerald-400/70 to-emerald-500/50' : 'border-t-2 border-dashed border-red-500/40 h-0'}`} />
+                          <div className={`absolute left-0 right-0 h-0.5 ${synced ? 'bg-gradient-to-r from-sky-500/50 via-emerald-400/70 to-emerald-500/50' : unknownSync ? 'border-t-2 border-dashed border-gray-600 h-0' : 'border-t-2 border-dashed border-red-500/40 h-0'}`} />
                           {/* 중앙 동기화 배지 */}
-                          <div className={`relative z-10 flex flex-col items-center gap-1 rounded-xl border px-3 py-2 backdrop-blur-sm ${synced ? 'border-emerald-500/40 bg-emerald-500/10' : 'border-red-500/40 bg-red-500/10'}`}>
+                          <div className={`relative z-10 flex flex-col items-center gap-1 rounded-xl border px-3 py-2 backdrop-blur-sm ${synced ? 'border-emerald-500/40 bg-emerald-500/10' : unknownSync ? 'border-gray-600 bg-gray-800/40' : 'border-red-500/40 bg-red-500/10'}`}>
                             {synced
                               ? <RefreshCw className="w-4 h-4 text-emerald-400 animate-spin" style={{ animationDuration: '3s' }} />
-                              : <WifiOff className="w-4 h-4 text-red-400" />}
-                            <span className={`text-[9px] font-bold whitespace-nowrap ${synced ? 'text-emerald-400' : 'text-red-400'}`}>
-                              {synced ? '실시간 동기화' : '동기화 끊김'}
+                              : <WifiOff className={`w-4 h-4 ${unknownSync ? 'text-gray-400' : 'text-red-400'}`} />}
+                            <span className={`text-[9px] font-bold whitespace-nowrap ${synced ? 'text-emerald-400' : unknownSync ? 'text-gray-400' : 'text-red-400'}`}>
+                              {synced ? '실시간 동기화' : unknownSync ? '확인 지연' : '동기화 끊김'}
                             </span>
                           </div>
                         </div>
-                        <div className="flex-1"><NodeCard node={b} /></div>
+                        <div className="flex-1"><NodeCard node={b} listStale={listStale} /></div>
                       </div>
                     )
                   })()
                 ) : (
                   // 1개 또는 3개+ 노드 — PRIMARY 우선 정렬, 좌우 그리드로 나란히
                   <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-                    {orderNodes(c.nodes).map(n => <NodeCard key={n.nodeId} node={n} />)}
+                    {orderNodes(c.nodes).map(n => <NodeCard key={n.nodeId} node={n} listStale={listStale} />)}
                   </div>
                 )}
               </div>
@@ -388,10 +410,8 @@ export default function HaGroups() {
       )}
       </>)}
 
-      {tab === 'replication' && <ReplicationTab clusters={clusters} loading={loading} />}
-      {tab === 'heartbeat'   && <HeartbeatTab   clusters={clusters} />}
-      {tab === 'metadata'    && <MetadataSyncTab clusters={clusters} />}
-      {tab === 'agents'      && <AgentStatusTab  clusters={rawClusters} nodeMap={nodeMap} loading={loading} />}
+      {tab === 'heartbeat' && <HeartbeatTab   clusters={clusters} />}
+      {tab === 'metadata'  && <MetadataSyncTab clusters={clusters} />}
 
       {snapCluster && (
         <SnapshotModal cluster={snapCluster} isOperator={isOperator}

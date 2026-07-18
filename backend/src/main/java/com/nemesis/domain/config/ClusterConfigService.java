@@ -121,7 +121,8 @@ public class ClusterConfigService {
             n.setHeartbeatIp((String) nm.get("heartbeatIp"));
             n.setNetIface((String) nm.get("netIface"));
             if (nm.get("osType") != null) n.setOsType(Node.OsType.valueOf((String) nm.get("osType")));
-            if (nm.get("role") != null) n.setRole(Node.Role.parse((String) nm.get("role")));
+            if (nm.get("role") != null) n.changeRole(Node.Role.parse((String) nm.get("role")));
+            else n.setUpdatedAt(java.time.OffsetDateTime.now());
             nodeRepository.save(n);
             restored++;
         }

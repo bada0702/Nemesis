@@ -50,17 +50,50 @@ if [ -f .env ]; then
 else
     [ -f .env.example ] || err ".env.example 이 없습니다(저장소 손상?)"
     cp .env.example .env
-    # DB 비밀번호 자동 생성(기본 changeme 치환)
-    GEN_PW="$(head -c 18 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c 24)"
-    if grep -q '^DB_PASSWORD=' .env; then
-        sed -i "s/^DB_PASSWORD=.*/DB_PASSWORD=${GEN_PW}/" .env
-    fi
-    ok ".env 생성 (DB_PASSWORD 자동 생성)"
+    ok ".env 생성"
     warn "AI(LLM)·알림을 쓰려면 .env 의 LLM_*, TELEGRAM_*, EMAIL_* 값을 채우세요."
 fi
 
-# 운영 접속 origin 안내(외부 접속 시 CORS 추가 필요)
+# DB_PASSWORD가 아예 없으면(신규 생성 직후이거나, 손상된 .env를 그대로 가져온 경우)
+# 새로 생성해 채운다. postgres는 최초 초기화 시점의 비밀번호를 고정 사용하므로,
+# 이 값이 비어있으면 postgres 컨테이너(POSTGRES_PASSWORD)와 백엔드(DB_PASSWORD)가
+# 서로 다른 기본값을 채택해 "password authentication failed" 로 기동이 깨질 수 있다.
+# (postgres 데이터 볼륨이 이미 있는 재설치라면 이 값을 바꿔도 볼륨을 지우기 전까진
+#  기존 비밀번호가 유지되므로, 그 경우엔 docker compose down -v 후 재기동 필요.)
+if ! grep -qE '^DB_PASSWORD=.+' .env; then
+    GEN_PW="$(head -c 18 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c 24)"
+    if grep -q '^DB_PASSWORD=' .env; then
+        sed -i "s/^DB_PASSWORD=.*/DB_PASSWORD=${GEN_PW}/" .env
+    else
+        echo "DB_PASSWORD=${GEN_PW}" >> .env
+    fi
+    ok "DB_PASSWORD 자동 생성"
+fi
+
 UI_PORT="$(grep -E '^NEMESIS_UI_PORT=' .env | cut -d= -f2 || true)"; UI_PORT="${UI_PORT:-18090}"
+API_PORT="$(grep -E '^NEMESIS_API_PORT=' .env | cut -d= -f2 || true)"; API_PORT="${API_PORT:-18080}"
+
+# .env를 다른 서버에서 그대로 복사해 왔을 수 있으므로, IP가 걸린 항목은
+# 매 실행마다 이 서버의 실제 IP로 맞춘다(그 외 값은 보존).
+HOST_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
+if [ -n "$HOST_IP" ]; then
+    if grep -q '^NEMESIS_MGMT_URL=' .env; then
+        sed -i "s#^NEMESIS_MGMT_URL=.*#NEMESIS_MGMT_URL=http://${HOST_IP}:${API_PORT}#" .env
+    else
+        echo "NEMESIS_MGMT_URL=http://${HOST_IP}:${API_PORT}" >> .env
+    fi
+    HOST_ORIGIN="http://${HOST_IP}:${UI_PORT}"
+    if grep -q '^NEMESIS_ALLOWED_ORIGINS=' .env; then
+        if ! grep '^NEMESIS_ALLOWED_ORIGINS=' .env | grep -qF "$HOST_ORIGIN"; then
+            sed -i "s#^NEMESIS_ALLOWED_ORIGINS=.*#&,${HOST_ORIGIN}#" .env
+        fi
+    else
+        echo "NEMESIS_ALLOWED_ORIGINS=${HOST_ORIGIN}" >> .env
+    fi
+    ok "이 서버 IP(${HOST_IP})로 NEMESIS_MGMT_URL/NEMESIS_ALLOWED_ORIGINS 반영"
+else
+    warn "서버 IP 감지 실패 — NEMESIS_MGMT_URL/NEMESIS_ALLOWED_ORIGINS 를 .env 에서 직접 확인하세요."
+fi
 
 # ── 3. 프론트엔드 dist 빌드 (node 컨테이너) ─────────────────────
 if [ -f frontend/dist/index.html ]; then
@@ -81,7 +114,6 @@ $COMPOSE up -d --build || err "compose up 실패"
 ok "컨테이너 기동 요청 완료"
 
 # ── 5. 헬스 대기 (DB 스키마는 Flyway 자동 적용) ─────────────────
-API_PORT="$(grep -E '^NEMESIS_API_PORT=' .env | cut -d= -f2 || true)"; API_PORT="${API_PORT:-18080}"
 info "백엔드 헬스 대기(최대 120초, Flyway 마이그레이션 포함)..."
 for i in $(seq 1 60); do
     if curl -fsS "http://localhost:${API_PORT}/actuator/health" &>/dev/null \
@@ -94,7 +126,7 @@ for i in $(seq 1 60); do
 done
 
 # ── 6. 안내 ────────────────────────────────────────────────────
-HOST_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"; HOST_IP="${HOST_IP:-<server-ip>}"
+HOST_IP="${HOST_IP:-<server-ip>}"
 echo ""
 echo -e "  ${GREEN}${BOLD}설치 완료!${NC}"
 echo ""
@@ -104,7 +136,6 @@ echo "  로그:    $COMPOSE logs -f nemesis-server"
 echo "  중지:    $COMPOSE down        (데이터 볼륨 nemesis-data 는 보존)"
 echo "  완전삭제: $COMPOSE down -v     (DB 데이터까지 삭제)"
 echo ""
-echo "  참고: 외부 호스트에서 접속하면 .env 의 NEMESIS_ALLOWED_ORIGINS 에"
-echo "        해당 origin(http://${HOST_IP}:${UI_PORT}) 을 추가 후 재기동하세요."
 echo "  참고: AI 운영(aibot 사이드카, :18900)은 별도 설치 컴포넌트입니다."
+echo "        설치: sudo nemesis-bot/install.sh (관리서버 1대에만 실행)"
 echo ""

@@ -5,6 +5,8 @@ import com.nemesis.domain.cluster.Cluster;
 import com.nemesis.domain.cluster.ClusterRepository;
 import com.nemesis.domain.node.Node;
 import com.nemesis.domain.node.NodeRepository;
+import com.nemesis.domain.storage.dto.StorageDtos.BatchDeviceItem;
+import com.nemesis.domain.storage.dto.StorageDtos.BatchRegisterRequest;
 import com.nemesis.domain.storage.dto.StorageDtos.RegisterDeviceRequest;
 import org.junit.jupiter.api.Test;
 
@@ -74,7 +76,7 @@ class StorageServiceTest {
         when(clusterRepo.findById(clusterId)).thenReturn(Optional.of(cluster(clusterId)));
 
         assertThatThrownBy(() -> svc.registerDevice(clusterId,
-                new RegisterDeviceRequest("not a wwid!", null, null, null, null)))
+                new RegisterDeviceRequest("not a wwid!", null, null, null, null, null, null, null)))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("WWID");
     }
@@ -86,7 +88,7 @@ class StorageServiceTest {
         when(deviceRepo.findByClusterIdAndWwid(clusterId, "0123abcd")).thenReturn(Optional.of(mock(StorageDevice.class)));
 
         assertThatThrownBy(() -> svc.registerDevice(clusterId,
-                new RegisterDeviceRequest("0123abcd", null, null, null, null)))
+                new RegisterDeviceRequest("0123abcd", null, null, null, null, null, null, null)))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("이미 등록");
     }
@@ -94,15 +96,105 @@ class StorageServiceTest {
     @Test
     void registerDevice_savesManualSource_whenNoDiscoveredNodeId() {
         UUID clusterId = UUID.randomUUID();
+        UUID nodeId = UUID.randomUUID();
+        Node activeNode = node(clusterId, nodeId, "bot");
         when(clusterRepo.findById(clusterId)).thenReturn(Optional.of(cluster(clusterId)));
         when(deviceRepo.findByClusterIdAndWwid(clusterId, "0123abcd")).thenReturn(Optional.empty());
+        when(deviceRepo.findByClusterId(clusterId)).thenReturn(List.of());
+        when(nodeRepo.findByClusterId(clusterId)).thenReturn(List.of(activeNode));
+        when(cmd.execute(eq(activeNode), eq("storage.sh fs-create 0123abcd ext4 /nemesis/share/app1")))
+                .thenReturn(new AgentCommandClient.Result(true, 0, "", "", null));
         when(deviceRepo.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         StorageDevice saved = svc.registerDevice(clusterId,
-                new RegisterDeviceRequest("0123abcd", "라벨", 100L, 2, null));
+                new RegisterDeviceRequest("0123abcd", "라벨", 100L, 2, null, "app1", "ext4", nodeId));
 
         assertThat(saved.getSource()).isEqualTo(StorageDevice.Source.MANUAL);
         assertThat(saved.getWwid()).isEqualTo("0123abcd");
+        assertThat(saved.getMountPath()).isEqualTo("/nemesis/share/app1");
+        assertThat(saved.getFstype()).isEqualTo("ext4");
+    }
+
+    @Test
+    void registerDevice_rejectsInvalidDirName() {
+        UUID clusterId = UUID.randomUUID();
+        when(clusterRepo.findById(clusterId)).thenReturn(Optional.of(cluster(clusterId)));
+        when(deviceRepo.findByClusterIdAndWwid(clusterId, "0123abcd")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> svc.registerDevice(clusterId,
+                new RegisterDeviceRequest("0123abcd", null, null, null, null, "Bad Name!", "ext4", UUID.randomUUID())))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("디렉토리명");
+    }
+
+    @Test
+    void registerDevice_rejectsUnsupportedFstype() {
+        UUID clusterId = UUID.randomUUID();
+        when(clusterRepo.findById(clusterId)).thenReturn(Optional.of(cluster(clusterId)));
+        when(deviceRepo.findByClusterIdAndWwid(clusterId, "0123abcd")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> svc.registerDevice(clusterId,
+                new RegisterDeviceRequest("0123abcd", null, null, null, null, "app1", "zfs", UUID.randomUUID())))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("fstype");
+    }
+
+    @Test
+    void registerDevice_rejectsDuplicateMountPath() {
+        UUID clusterId = UUID.randomUUID();
+        when(clusterRepo.findById(clusterId)).thenReturn(Optional.of(cluster(clusterId)));
+        when(deviceRepo.findByClusterIdAndWwid(clusterId, "0123abcd")).thenReturn(Optional.empty());
+        StorageDevice taken = StorageDevice.builder().wwid("other").mountPath("/nemesis/share/app1").build();
+        when(deviceRepo.findByClusterId(clusterId)).thenReturn(List.of(taken));
+
+        assertThatThrownBy(() -> svc.registerDevice(clusterId,
+                new RegisterDeviceRequest("0123abcd", null, null, null, null, "app1", "ext4", UUID.randomUUID())))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("마운트 경로");
+    }
+
+    @Test
+    void registerDevice_throwsWhenAgentMountFails() {
+        UUID clusterId = UUID.randomUUID();
+        UUID nodeId = UUID.randomUUID();
+        Node activeNode = node(clusterId, nodeId, "bot");
+        when(clusterRepo.findById(clusterId)).thenReturn(Optional.of(cluster(clusterId)));
+        when(deviceRepo.findByClusterIdAndWwid(clusterId, "0123abcd")).thenReturn(Optional.empty());
+        when(deviceRepo.findByClusterId(clusterId)).thenReturn(List.of());
+        when(nodeRepo.findByClusterId(clusterId)).thenReturn(List.of(activeNode));
+        when(cmd.execute(eq(activeNode), anyString()))
+                .thenReturn(AgentCommandClient.Result.transportError("mount 실패"));
+
+        assertThatThrownBy(() -> svc.registerDevice(clusterId,
+                new RegisterDeviceRequest("0123abcd", null, null, null, null, "app1", "ext4", nodeId)))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("마운트 실패");
+        verify(deviceRepo, never()).save(any());
+    }
+
+    @Test
+    void registerDevicesBatch_continuesAfterOneItemFails() {
+        UUID clusterId = UUID.randomUUID();
+        UUID nodeId = UUID.randomUUID();
+        Node activeNode = node(clusterId, nodeId, "bot");
+        when(clusterRepo.findById(clusterId)).thenReturn(Optional.of(cluster(clusterId)));
+        when(deviceRepo.findByClusterIdAndWwid(eq(clusterId), anyString())).thenReturn(Optional.empty());
+        when(deviceRepo.findByClusterId(clusterId)).thenReturn(List.of());
+        when(nodeRepo.findByClusterId(clusterId)).thenReturn(List.of(activeNode));
+        when(cmd.execute(eq(activeNode), contains("aaaa1111")))
+                .thenReturn(new AgentCommandClient.Result(true, 0, "", "", null));
+        when(cmd.execute(eq(activeNode), contains("bbbb2222")))
+                .thenReturn(AgentCommandClient.Result.transportError("mount 실패"));
+        when(deviceRepo.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        var results = svc.registerDevicesBatch(clusterId, new BatchRegisterRequest(nodeId, List.of(
+                new BatchDeviceItem("aaaa1111", "app1", "ext4", 10L, 1, null),
+                new BatchDeviceItem("bbbb2222", "app2", "ext4", 10L, 1, null))));
+
+        assertThat(results).hasSize(2);
+        assertThat(results.get(0).success()).isTrue();
+        assertThat(results.get(1).success()).isFalse();
+        assertThat(results.get(1).error()).contains("마운트 실패");
     }
 
     @Test

@@ -7,7 +7,6 @@ import {
 } from '../api/client'
 import { useAuth } from '../auth/AuthContext'
 import ClusterTopologyPanel from '../components/ClusterTopologyPanel'
-import DirSyncPanel from '../components/DirSyncPanel'
 
 const OS_TYPES = ['Linux', 'AIX', 'RHEL', 'Ubuntu', 'CentOS']
 const ROLES    = ['PRIMARY', 'STANDBY']
@@ -451,14 +450,29 @@ export default function ClusterSettings() {
   const [loading, setLoading]   = useState(true)
 
   useEffect(() => {
-    async function load() {
+    let cancelled = false
+
+    async function loadAll() {
       try {
         const [sr, nr] = await Promise.all([getClusterStatus(id), getClusterNodes(id)])
+        if (cancelled) return
         setCluster({ id: +id, name: sr.data.clusterName, vip: sr.data.vip })
         setNodes(nr.data)
-      } catch {} finally { setLoading(false) }
+      } catch {} finally { if (!cancelled) setLoading(false) }
     }
-    load()
+
+    // 토폴로지 패널과 같은 주기(3초)로 노드 목록만 갱신 -- loading은 건드리지 않아
+    // 화면 깜빡임 없이 role/state가 최신으로 유지된다.
+    async function refreshNodes() {
+      try {
+        const nr = await getClusterNodes(id)
+        if (!cancelled) setNodes(nr.data)
+      } catch {}
+    }
+
+    loadAll()
+    const iv = setInterval(refreshNodes, 3000)
+    return () => { cancelled = true; clearInterval(iv) }
   }, [id])
 
   function handleNodeSaved(node) {
@@ -544,9 +558,6 @@ export default function ClusterSettings() {
 
       {/* VIP 실제 적용 상태 */}
       {cluster && <VipStatusPanel clusterId={id} vip={cluster.vip} />}
-
-      {/* 폴더 동기화 */}
-      <DirSyncPanel clusterId={id} nodes={nodes} />
 
       {/* 노드 관리 */}
       <div>

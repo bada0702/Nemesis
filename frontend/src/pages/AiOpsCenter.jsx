@@ -110,6 +110,9 @@ function ProposalCard({ p, onDecide, busy }) {
           ))}
         </div>
       )}
+      <p className="text-[10px] text-gray-500 mb-2">
+        발생: {fmt(p.createdAt)}{p.decidedAt ? ` · 처리: ${fmt(p.decidedAt)}` : ''}
+      </p>
       <div className="flex gap-2">
         <button disabled={busy} onClick={() => {
             if ((p.requiresManual || p.blocked) &&

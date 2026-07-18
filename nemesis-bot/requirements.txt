@@ -48,4 +48,8 @@ fastapi>=0.110
 uvicorn[standard]>=0.29
 paramiko>=3.4
 httpx>=0.27
+PyYAML>=6.0
 pytest>=8.0
+
+# Knowledge base (RDF/OWL 장애 지식베이스 파서)
+rdflib>=7.0.0

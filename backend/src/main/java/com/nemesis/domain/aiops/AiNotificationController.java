@@ -18,11 +18,13 @@ public class AiNotificationController {
         Map<String, Object> out = new HashMap<>();
         out.put("pending", repo.countByStatus(AiProposal.PENDING));
         out.put("openFindings", findingRepo.countByStatus(AiFinding.OPEN));
-        out.put("recent", repo.findTop50ByOrderByCreatedAtDesc().stream().limit(10)
+        // 알림 리스트는 배지 카운트(pending/openFindings)와 일치하도록 actionable 항목만 노출한다.
+        // (RESOLVED finding / REJECTED proposal 은 이력이지 알림이 아니다 — AI 운영 센터에서 조회.)
+        out.put("recent", repo.findByStatusOrderByCreatedAtDesc(AiProposal.PENDING).stream().limit(10)
                 .map(p -> Map.of("id", p.getId(), "status", p.getStatus(),
                         "triggerReason", p.getTriggerReason() == null ? "" : p.getTriggerReason(),
                         "createdAt", p.getCreatedAt())).toList());
-        out.put("recentFindings", findingRepo.findTop50ByOrderByLastSeenAtDesc().stream().limit(10)
+        out.put("recentFindings", findingRepo.findByStatusOrderByLastSeenAtDesc(AiFinding.OPEN).stream().limit(10)
                 .map(f -> {
                     Map<String, Object> mm = new HashMap<>();
                     mm.put("id", f.getId());

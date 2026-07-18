@@ -11,8 +11,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.*;
-import java.net.InetSocketAddress;
-import java.net.Socket;
 import java.util.*;
 import java.util.concurrent.*;
 
@@ -50,23 +48,19 @@ public class AgentInstallService {
             result.sshOk(true);
         } catch (Exception e) {
             return result.sshOk(false).sshError(e.getMessage())
-                         .port17001Ok(false).port17001Error("SSH 실패로 건너뜀")
                          .peerChecks(List.of()).build();
         }
 
-        try (Socket s = new Socket()) {
-            s.connect(new InetSocketAddress(req.getHost(), 17001), 3000);
-            result.port17001Ok(true);
-        } catch (Exception e) {
-            result.port17001Ok(false).port17001Error("포트 17001 미응답: " + e.getMessage());
-        }
-
+        String targetHeartbeatIp = resolveHeartbeatIp(req.getHost(), req.getHeartbeatIp());
         List<Node> peers = req.getClusterId() != null
                 ? nodeRepository.findByClusterId(req.getClusterId())
                 : List.of();
         List<TestConnResult.PeerCheck> peerChecks = new ArrayList<>();
         for (Node peer : peers) {
             if (peer.getIpAddress() == null) continue;
+            // 지금 설치 중인 대상 자신은 클러스터에 이미 등록돼 있어도 피어 검사에서 제외
+            // (자기 자신의 아직 안 뜬 17000 포트를 검사하면 항상 실패로 보임)
+            if (peer.getIpAddress().equals(req.getHost()) || peer.getIpAddress().equals(targetHeartbeatIp)) continue;
             peerChecks.add(checkHeartbeatViaSsh(session, peer.getHostname(), peer.getIpAddress()));
         }
         result.peerChecks(peerChecks);
@@ -215,7 +209,7 @@ public class AgentInstallService {
     }
 
     private void scpFiles(Session session, String jobId) throws Exception {
-        String[] mainFiles = {"nemesis-agent.py", "collect.sh", "collect_aix.sh", "control.sh", "install.sh"};
+        String[] mainFiles = {"nemesis-agent.py", "collect.sh", "collect_aix.sh", "control.sh", "storage.sh", "install.sh"};
         ChannelSftp sftp = (ChannelSftp) session.openChannel("sftp");
         sftp.connect(5_000);
         try {
@@ -247,13 +241,16 @@ public class AgentInstallService {
     }
 
     private boolean waitForRegistration(Session session, String mgmtUrl, int timeoutSec) {
+        // /actuator/health는 노출돼 있지 않아 항상 404다(management endpoints 미노출).
+        // 자격증명 없이 백엔드 도달 가능 여부를 확인할 수 있는 /api/auth/login에
+        // 빈 바디로 요청하면 Spring 검증 단계에서 항상 400을 반환한다.
         String checkCmd = String.format(
-            "curl -sk -o /dev/null -w '%%{http_code}' %s/actuator/health 2>/dev/null || echo 000", mgmtUrl);
+            "curl -sk -o /dev/null -w '%%{http_code}' -X POST -H 'Content-Type: application/json' -d '{}' %s/api/auth/login 2>/dev/null || echo 000", mgmtUrl);
         long deadline = System.currentTimeMillis() + timeoutSec * 1000L;
         while (System.currentTimeMillis() < deadline) {
             try {
                 String out = execCommand(session, checkCmd).trim();
-                if ("200".equals(out)) return true;
+                if ("400".equals(out)) return true;
                 Thread.sleep(2000);
             } catch (Exception e) {
                 return false;

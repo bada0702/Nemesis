@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+         xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
+         xmlns:owl="http://www.w3.org/2002/07/owl#"
+         xmlns:xsd="http://www.w3.org/2001/XMLSchema#"
+         xmlns:kb="http://nemesis.local/kb#"
+         xml:base="http://nemesis.local/kb#">
+
+  <owl:Class rdf:about="#Fault"/>
+  <owl:Class rdf:about="#Symptom"/>
+  <owl:Class rdf:about="#Cause"/>
+  <owl:Class rdf:about="#DiagnosisStep"/>
+  <owl:Class rdf:about="#Action"/>
+  <owl:Class rdf:about="#Caveat"/>
+
+  <owl:NamedIndividual rdf:about="#Fault_DirsyncFailure">
+    <rdf:type rdf:resource="#Fault"/>
+    <rdfs:label>디렉토리 동기화(dir-sync) 실패 (Linux)</rdfs:label>
+    <kb:has_fault_type>dirsync_failure</kb:has_fault_type>
+    <kb:has_os>linux</kb:has_os>
+    <kb:has_target_sw>dir-sync</kb:has_target_sw>
+    <kb:has_severity>warning</kb:has_severity>
+    <kb:related_to rdf:resource="http://nemesis.local/kb#Fault_DiskFull"/>
+    <kb:has_symptom rdf:resource="#Symptom_DirsyncFailure_1"/>
+    <kb:has_symptom rdf:resource="#Symptom_DirsyncFailure_2"/>
+    <kb:has_symptom rdf:resource="#Symptom_DirsyncFailure_3"/>
+    <kb:has_cause rdf:resource="#Cause_DirsyncFailure_1"/>
+    <kb:has_cause rdf:resource="#Cause_DirsyncFailure_2"/>
+    <kb:has_cause rdf:resource="#Cause_DirsyncFailure_3"/>
+    <kb:has_cause rdf:resource="#Cause_DirsyncFailure_4"/>
+    <kb:diagnosed_by rdf:resource="#Diagnosis_DirsyncFailure_1"/>
+    <kb:diagnosed_by rdf:resource="#Diagnosis_DirsyncFailure_2"/>
+    <kb:diagnosed_by rdf:resource="#Diagnosis_DirsyncFailure_3"/>
+    <kb:resolved_by rdf:resource="#Action_DirsyncFailure_1"/>
+    <kb:resolved_by rdf:resource="#Action_DirsyncFailure_2"/>
+    <kb:resolved_by rdf:resource="#Action_DirsyncFailure_3"/>
+    <kb:resolved_by rdf:resource="#Action_DirsyncFailure_4"/>
+    <kb:has_caveat rdf:resource="#Caveat_DirsyncFailure_1"/>
+    <kb:has_caveat rdf:resource="#Caveat_DirsyncFailure_2"/>
+  </owl:NamedIndividual>
+
+  <owl:NamedIndividual rdf:about="#Symptom_DirsyncFailure_1">
+    <rdf:type rdf:resource="#Symptom"/>
+    <kb:order rdf:datatype="xsd:integer">1</kb:order>
+    <rdfs:label>active→standby 디렉토리 동기화 실패, standby 데이터 최신화 안 됨.</rdfs:label>
+  </owl:NamedIndividual>
+  <owl:NamedIndividual rdf:about="#Symptom_DirsyncFailure_2">
+    <rdf:type rdf:resource="#Symptom"/>
+    <kb:order rdf:datatype="xsd:integer">2</kb:order>
+    <rdfs:label>동기화 이력/heartbeat 에 실패 기록.</rdfs:label>
+  </owl:NamedIndividual>
+  <owl:NamedIndividual rdf:about="#Symptom_DirsyncFailure_3">
+    <rdf:type rdf:resource="#Symptom"/>
+    <kb:order rdf:datatype="xsd:integer">3</kb:order>
+    <rdfs:label>페일오버 시 standby 데이터가 오래돼 서비스 품질 저하.</rdfs:label>
+  </owl:NamedIndividual>
+
+  <owl:NamedIndividual rdf:about="#Cause_DirsyncFailure_1">
+    <rdf:type rdf:resource="#Cause"/>
+    <kb:order rdf:datatype="xsd:integer">1</kb:order>
+    <rdfs:label>목적지 경로 권한 문제: dir-sync 는 NEMESIS_SYNC_USER(기본 nemesis) 비권한 계정으로 rsync over SSH. 목적지가 /root 면 Permission denied(13).</rdfs:label>
+  </owl:NamedIndividual>
+  <owl:NamedIndividual rdf:about="#Cause_DirsyncFailure_2">
+    <rdf:type rdf:resource="#Cause"/>
+    <kb:order rdf:datatype="xsd:integer">2</kb:order>
+    <rdfs:label>rsync 미설치(노드에 rsync 바이너리 없음).</rdfs:label>
+  </owl:NamedIndividual>
+  <owl:NamedIndividual rdf:about="#Cause_DirsyncFailure_3">
+    <rdf:type rdf:resource="#Cause"/>
+    <kb:order rdf:datatype="xsd:integer">3</kb:order>
+    <rdfs:label>SSH 키/신뢰 미설정으로 접속 실패.</rdfs:label>
+  </owl:NamedIndividual>
+  <owl:NamedIndividual rdf:about="#Cause_DirsyncFailure_4">
+    <rdf:type rdf:resource="#Cause"/>
+    <kb:order rdf:datatype="xsd:integer">4</kb:order>
+    <rdfs:label>대용량 경로(예: /root 20G) 동기화가 타임아웃(120s) 초과.</rdfs:label>
+  </owl:NamedIndividual>
+
+  <owl:NamedIndividual rdf:about="#Diagnosis_DirsyncFailure_1">
+    <rdf:type rdf:resource="#DiagnosisStep"/>
+    <kb:order rdf:datatype="xsd:integer">1</kb:order>
+    <kb:has_command>control.sh dir-list &lt;path&gt;</kb:has_command>
+    <rdfs:label>소스/목적지 디렉토리 목록 비교.</rdfs:label>
+  </owl:NamedIndividual>
+  <owl:NamedIndividual rdf:about="#Diagnosis_DirsyncFailure_2">
+    <rdf:type rdf:resource="#DiagnosisStep"/>
+    <kb:order rdf:datatype="xsd:integer">2</kb:order>
+    <kb:has_command>control.sh dir-sync &lt;args&gt;</kb:has_command>
+    <rdfs:label>수동 실행으로 에러 메시지 확인.</rdfs:label>
+  </owl:NamedIndividual>
+  <owl:NamedIndividual rdf:about="#Diagnosis_DirsyncFailure_3">
+    <rdf:type rdf:resource="#DiagnosisStep"/>
+    <kb:order rdf:datatype="xsd:integer">3</kb:order>
+    <rdfs:label>목적지 소유자/권한, rsync 설치 여부, SSH 키 신뢰 확인.</rdfs:label>
+  </owl:NamedIndividual>
+
+  <owl:NamedIndividual rdf:about="#Action_DirsyncFailure_1">
+    <rdf:type rdf:resource="#Action"/>
+    <kb:order rdf:datatype="xsd:integer">1</kb:order>
+    <kb:has_risk>LOW</kb:has_risk>
+    <rdfs:label>목적지를 nemesis 소유 경로로 변경, 또는 NEMESIS_SYNC_USER=root 로 운영.</rdfs:label>
+  </owl:NamedIndividual>
+  <owl:NamedIndividual rdf:about="#Action_DirsyncFailure_2">
+    <rdf:type rdf:resource="#Action"/>
+    <kb:order rdf:datatype="xsd:integer">2</kb:order>
+    <kb:has_risk>LOW</kb:has_risk>
+    <rdfs:label>노드에 rsync 설치.</rdfs:label>
+  </owl:NamedIndividual>
+  <owl:NamedIndividual rdf:about="#Action_DirsyncFailure_3">
+    <rdf:type rdf:resource="#Action"/>
+    <kb:order rdf:datatype="xsd:integer">3</kb:order>
+    <kb:has_risk>MEDIUM</kb:has_risk>
+    <kb:has_command>control.sh ssh-keygen-nemesis</kb:has_command>
+    <rdfs:label>SSH 키 신뢰 구성(+ control.sh ssh-authorize).</rdfs:label>
+  </owl:NamedIndividual>
+  <owl:NamedIndividual rdf:about="#Action_DirsyncFailure_4">
+    <rdf:type rdf:resource="#Action"/>
+    <kb:order rdf:datatype="xsd:integer">4</kb:order>
+    <kb:has_risk>LOW</kb:has_risk>
+    <rdfs:label>대용량/장시간 경로는 동기화 대상에서 제외하거나 타임아웃 조정.</rdfs:label>
+  </owl:NamedIndividual>
+
+  <owl:NamedIndividual rdf:about="#Caveat_DirsyncFailure_1">
+    <rdf:type rdf:resource="#Caveat"/>
+    <kb:order rdf:datatype="xsd:integer">1</kb:order>
+    <rdfs:label>/root 를 dir-sync 대상으로 잡지 말 것(20G·120s 타임아웃·nemesis 권한 문제).</rdfs:label>
+  </owl:NamedIndividual>
+  <owl:NamedIndividual rdf:about="#Caveat_DirsyncFailure_2">
+    <rdf:type rdf:resource="#Caveat"/>
+    <kb:order rdf:datatype="xsd:integer">2</kb:order>
+    <rdfs:label>동기화 실패는 페일오버 실패의 선행 원인이 될 수 있다(standby 데이터 불일치).</rdfs:label>
+  </owl:NamedIndividual>
+
+</rdf:RDF>

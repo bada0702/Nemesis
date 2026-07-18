@@ -10,9 +10,6 @@ public class TestConnResult {
     private boolean sshOk;
     private String  sshError;
 
-    private boolean port17001Ok;
-    private String  port17001Error;
-
     private List<PeerCheck> peerChecks;
 
     @Data

@@ -11,6 +11,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.OffsetDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -92,8 +93,13 @@ public class NodeService {
         if (body.get("netIface")    != null) node.setNetIface((String) body.get("netIface"));
         if (body.get("osType")      != null) node.setOsType(Node.OsType.valueOf(
                 ((String) body.get("osType")).toUpperCase()));
+        // 에이전트가 /api/agent/meta로 받는 필드(serviceIp/heartbeatIp/netIface/role) 중
+        // 하나라도 바뀌면 메타데이터 동기화 버전을 올린다.
+        if (body.get("serviceIp") != null || body.get("heartbeatIp") != null || body.get("netIface") != null) {
+            node.setUpdatedAt(OffsetDateTime.now());
+        }
         Node.Role before = node.getRole();
-        if (body.get("role")        != null) node.setRole(Node.Role.parse((String) body.get("role")));
+        if (body.get("role")        != null) node.changeRole(Node.Role.parse((String) body.get("role")));
         Node saved = nodeRepository.save(node);
         // STANDBY→PRIMARY 승격 시 VIP를 OS에 실제 반영(비동기 best-effort)
         if (before != Node.Role.active && saved.getRole() == Node.Role.active

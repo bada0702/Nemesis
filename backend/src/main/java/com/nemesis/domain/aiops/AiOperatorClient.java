@@ -6,6 +6,9 @@ import org.springframework.http.*;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 
+import org.springframework.web.util.UriComponentsBuilder;
+
+import java.net.URI;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -84,5 +87,51 @@ public class AiOperatorClient {
             log.warn("aibot execute 실패: {}", e.getMessage());
             return null;
         }
+    }
+
+    // ── 지식 파일 편집 프록시(시스템 설정 UI 용) ─────────────────────────────
+    // 폴백 없이 예외를 전파한다: 사이드카의 4xx(경로/검증 오류) 메시지를 컨트롤러가
+    // 그대로 사용자에게 돌려줘야 하므로 여기서 null 로 삼키지 않는다.
+    //
+    // path 쿼리 파라미터는 반드시 URI 객체로 만들어 '한 번만' 인코딩한다. 문자열 URL 을
+    // rt.exchange 에 넘기면 RestTemplate 이 템플릿으로 보고 재인코딩해 '/'→%2F→%252F 로
+    // 이중 인코딩되어 사이드카가 400 을 낸다(경로 형식 위반). UriComponentsBuilder.encode()
+    // 로 슬래시를 %2F 로 한 번만 인코딩한 URI 를 넘긴다.
+
+    private URI fileUri(String path) {
+        return UriComponentsBuilder.fromHttpUrl(props.getBaseUrl() + "/ai/knowledge/file")
+                .queryParam("path", path).build().encode().toUri();
+    }
+
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> knowledgeList() {
+        return rt.exchange(props.getBaseUrl() + "/ai/knowledge/files",
+                HttpMethod.GET, new HttpEntity<>(headers()), Map.class).getBody();
+    }
+
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> knowledgeRead(String path) {
+        return rt.exchange(fileUri(path), HttpMethod.GET,
+                new HttpEntity<>(headers()), Map.class).getBody();
+    }
+
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> knowledgeValidate(String content) {
+        HttpEntity<Map<String, Object>> req = new HttpEntity<>(
+                Map.of("content", content == null ? "" : content), headers());
+        return rt.postForObject(props.getBaseUrl() + "/ai/knowledge/validate", req, Map.class);
+    }
+
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> knowledgeSave(String path, String content) {
+        HttpEntity<Map<String, Object>> req = new HttpEntity<>(
+                Map.of("path", path, "content", content == null ? "" : content), headers());
+        return rt.postForObject(props.getBaseUrl() + "/ai/knowledge/file", req, Map.class);
+    }
+
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> knowledgeDelete(String path) {
+        return rt.exchange(fileUri(path), HttpMethod.DELETE,
+                new HttpEntity<>(headers()), Map.class).getBody();
     }
 }

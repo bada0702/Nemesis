@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+         xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
+         xmlns:owl="http://www.w3.org/2002/07/owl#"
+         xmlns:xsd="http://www.w3.org/2001/XMLSchema#"
+         xmlns:kb="http://nemesis.local/kb#"
+         xml:base="http://nemesis.local/kb#">
+
+  <owl:Class rdf:about="#Fault"/>
+  <owl:Class rdf:about="#Symptom"/>
+  <owl:Class rdf:about="#Cause"/>
+  <owl:Class rdf:about="#DiagnosisStep"/>
+  <owl:Class rdf:about="#Action"/>
+  <owl:Class rdf:about="#Caveat"/>
+
+  <owl:NamedIndividual rdf:about="#Fault_DiskFull">
+    <rdf:type rdf:resource="#Fault"/>
+    <rdfs:label>디스크 풀 / 파일시스템 포화 (Linux)</rdfs:label>
+    <kb:has_fault_type>disk_full</kb:has_fault_type>
+    <kb:has_os>linux</kb:has_os>
+    <kb:has_target_sw>filesystem</kb:has_target_sw>
+    <kb:has_severity>critical</kb:has_severity>
+    <kb:related_to rdf:resource="http://nemesis.local/kb#Fault_DirsyncFailure"/>
+    <kb:has_symptom rdf:resource="#Symptom_DiskFull_1"/>
+    <kb:has_symptom rdf:resource="#Symptom_DiskFull_2"/>
+    <kb:has_symptom rdf:resource="#Symptom_DiskFull_3"/>
+    <kb:has_cause rdf:resource="#Cause_DiskFull_1"/>
+    <kb:has_cause rdf:resource="#Cause_DiskFull_2"/>
+    <kb:has_cause rdf:resource="#Cause_DiskFull_3"/>
+    <kb:has_cause rdf:resource="#Cause_DiskFull_4"/>
+    <kb:diagnosed_by rdf:resource="#Diagnosis_DiskFull_1"/>
+    <kb:diagnosed_by rdf:resource="#Diagnosis_DiskFull_2"/>
+    <kb:diagnosed_by rdf:resource="#Diagnosis_DiskFull_3"/>
+    <kb:resolved_by rdf:resource="#Action_DiskFull_1"/>
+    <kb:resolved_by rdf:resource="#Action_DiskFull_2"/>
+    <kb:resolved_by rdf:resource="#Action_DiskFull_3"/>
+    <kb:has_caveat rdf:resource="#Caveat_DiskFull_1"/>
+    <kb:has_caveat rdf:resource="#Caveat_DiskFull_2"/>
+  </owl:NamedIndividual>
+
+  <owl:NamedIndividual rdf:about="#Symptom_DiskFull_1">
+    <rdf:type rdf:resource="#Symptom"/>
+    <kb:order rdf:datatype="xsd:integer">1</kb:order>
+    <rdfs:label>DetectionEvent DISK_HIGH, 또는 df 사용률 100% 근접.</rdfs:label>
+  </owl:NamedIndividual>
+  <owl:NamedIndividual rdf:about="#Symptom_DiskFull_2">
+    <rdf:type rdf:resource="#Symptom"/>
+    <kb:order rdf:datatype="xsd:integer">2</kb:order>
+    <rdfs:label>DB(postgres)가 갑자기 다운 — 로그에 PANIC: could not write to file / No space left on device.</rdfs:label>
+  </owl:NamedIndividual>
+  <owl:NamedIndividual rdf:about="#Symptom_DiskFull_3">
+    <rdf:type rdf:resource="#Symptom"/>
+    <kb:order rdf:datatype="xsd:integer">3</kb:order>
+    <rdfs:label>로그 기록 실패, 임시파일 생성 실패로 애플리케이션 연쇄 오류.</rdfs:label>
+  </owl:NamedIndividual>
+
+  <owl:NamedIndividual rdf:about="#Cause_DiskFull_1">
+    <rdf:type rdf:resource="#Cause"/>
+    <kb:order rdf:datatype="xsd:integer">1</kb:order>
+    <rdfs:label>로그/코어덤프 누적으로 파티션 포화.</rdfs:label>
+  </owl:NamedIndividual>
+  <owl:NamedIndividual rdf:about="#Cause_DiskFull_2">
+    <rdf:type rdf:resource="#Cause"/>
+    <kb:order rdf:datatype="xsd:integer">2</kb:order>
+    <rdfs:label>dir-sync 목적지에 대용량 데이터가 예상보다 크게 쌓임.</rdfs:label>
+  </owl:NamedIndividual>
+  <owl:NamedIndividual rdf:about="#Cause_DiskFull_3">
+    <rdf:type rdf:resource="#Cause"/>
+    <kb:order rdf:datatype="xsd:integer">3</kb:order>
+    <rdfs:label>DB WAL/덤프 파일 급증.</rdfs:label>
+  </owl:NamedIndividual>
+  <owl:NamedIndividual rdf:about="#Cause_DiskFull_4">
+    <rdf:type rdf:resource="#Cause"/>
+    <kb:order rdf:datatype="xsd:integer">4</kb:order>
+    <rdfs:label>오래된 백업/아카이브 미정리.</rdfs:label>
+  </owl:NamedIndividual>
+
+  <owl:NamedIndividual rdf:about="#Diagnosis_DiskFull_1">
+    <rdf:type rdf:resource="#DiagnosisStep"/>
+    <kb:order rdf:datatype="xsd:integer">1</kb:order>
+    <kb:has_command>control.sh health</kb:has_command>
+    <rdfs:label>디스크 사용률 포함 노드 상태 확인.</rdfs:label>
+  </owl:NamedIndividual>
+  <owl:NamedIndividual rdf:about="#Diagnosis_DiskFull_2">
+    <rdf:type rdf:resource="#DiagnosisStep"/>
+    <kb:order rdf:datatype="xsd:integer">2</kb:order>
+    <rdfs:label>원격 조사 도구로 df -h, 대용량 디렉토리 확인(읽기 전용).</rdfs:label>
+  </owl:NamedIndividual>
+  <owl:NamedIndividual rdf:about="#Diagnosis_DiskFull_3">
+    <rdf:type rdf:resource="#DiagnosisStep"/>
+    <kb:order rdf:datatype="xsd:integer">3</kb:order>
+    <rdfs:label>postgres 다운 동반 시: 공간 확보 후 DB 재기동 순서(공간 없이 재기동하면 재PANIC).</rdfs:label>
+  </owl:NamedIndividual>
+
+  <owl:NamedIndividual rdf:about="#Action_DiskFull_1">
+    <rdf:type rdf:resource="#Action"/>
+    <kb:order rdf:datatype="xsd:integer">1</kb:order>
+    <kb:has_risk>MEDIUM</kb:has_risk>
+    <rdfs:label>즉시 공간 확보: 안전한 로그/임시파일 정리(운영자 확인 후).</rdfs:label>
+  </owl:NamedIndividual>
+  <owl:NamedIndividual rdf:about="#Action_DiskFull_2">
+    <rdf:type rdf:resource="#Action"/>
+    <kb:order rdf:datatype="xsd:integer">2</kb:order>
+    <kb:has_risk>MEDIUM</kb:has_risk>
+    <kb:has_command>control.sh svc-restart &lt;postgres-unit&gt;</kb:has_command>
+    <rdfs:label>공간 확보 후 DB 재기동.</rdfs:label>
+  </owl:NamedIndividual>
+  <owl:NamedIndividual rdf:about="#Action_DiskFull_3">
+    <rdf:type rdf:resource="#Action"/>
+    <kb:order rdf:datatype="xsd:integer">3</kb:order>
+    <kb:has_risk>LOW</kb:has_risk>
+    <rdfs:label>근본 조치: 로그 로테이션/보존정책, 파티션 증설 검토.</rdfs:label>
+  </owl:NamedIndividual>
+
+  <owl:NamedIndividual rdf:about="#Caveat_DiskFull_1">
+    <rdf:type rdf:resource="#Caveat"/>
+    <kb:order rdf:datatype="xsd:integer">1</kb:order>
+    <rdfs:label>디스크 100% → postgres PANIC 다운은 실제 발생 이력이 있는 연쇄 장애. 공간 확보가 선행돼야 DB 가 정상 기동.</rdfs:label>
+  </owl:NamedIndividual>
+  <owl:NamedIndividual rdf:about="#Caveat_DiskFull_2">
+    <rdf:type rdf:resource="#Caveat"/>
+    <kb:order rdf:datatype="xsd:integer">2</kb:order>
+    <rdfs:label>dir-sync 목적지가 /root 등 대용량·권한 경로면 별도 위험 — dirsync.xml 참조.</rdfs:label>
+  </owl:NamedIndividual>
+
+</rdf:RDF>

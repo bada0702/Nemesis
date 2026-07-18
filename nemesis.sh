@@ -43,6 +43,75 @@ is_running() {
     [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null
 }
 
+# ── Docker stack (postgres + nemesis-server + frontend) ──────────
+# docker-compose v1.29.2 recreate 버그 회피: `up`은 절대 쓰지 않고
+# `ps -q`(조회)로 컨테이너를 찾아 `start`/`stop`만 사용한다.
+# nemesis-server-02는 제외: 실제 HA 이중화는 agent 노드(bot/albot-02) 간에
+# 이루어지고, server-02는 아무 곳에서도 참조되지 않는 미사용 인스턴스이며
+# postgres를 nemesis-server와 공유해 스케줄러 중복 실행 위험이 있다.
+DOCKER_SERVICES=(postgres nemesis-server nemesis-frontend)
+
+docker_available() {
+    command -v docker &>/dev/null && command -v docker-compose &>/dev/null
+}
+
+docker_cid() {
+    (cd "$ROOT" && docker-compose ps -q "$1" 2>/dev/null)
+}
+
+docker_container_running() {
+    local cid="$1"
+    [ -n "$cid" ] && [ "$(docker inspect -f '{{.State.Running}}' "$cid" 2>/dev/null)" = "true" ]
+}
+
+docker_stack_up() {
+    if ! docker_available; then
+        warn "docker/docker-compose 없음 -- docker 스택 건너뜀"
+        return
+    fi
+    info "Docker 스택 확인 중..."
+    for svc in "${DOCKER_SERVICES[@]}"; do
+        local cid; cid=$(docker_cid "$svc")
+        if [ -z "$cid" ]; then
+            warn "docker '$svc' 컨테이너 없음 -- 건너뜀 (최초 1회 docker-compose up -d 필요)"
+            continue
+        fi
+        if docker_container_running "$cid"; then
+            warn "docker '$svc' 이미 실행 중"
+        else
+            info "docker '$svc' 기동 중..."
+            if docker start "$cid" &>/dev/null; then
+                ok "docker '$svc' 시작됨"
+            else
+                err "docker '$svc' 시작 실패"
+            fi
+        fi
+    done
+}
+
+docker_stack_down() {
+    if ! docker_available; then
+        return
+    fi
+    info "Docker 스택 확인 중..."
+    local i
+    for (( i=${#DOCKER_SERVICES[@]}-1; i>=0; i-- )); do
+        local svc="${DOCKER_SERVICES[$i]}"
+        local cid; cid=$(docker_cid "$svc")
+        [ -z "$cid" ] && continue
+        if docker_container_running "$cid"; then
+            info "docker '$svc' 정지 중..."
+            if docker stop "$cid" &>/dev/null; then
+                ok "docker '$svc' 정지됨"
+            else
+                err "docker '$svc' 정지 실패"
+            fi
+        else
+            warn "docker '$svc' 이미 정지됨"
+        fi
+    done
+}
+
 # ── START ──────────────────────────────────────────────────────
 cmd_start() {
     echo ""
@@ -55,6 +124,9 @@ cmd_start() {
         exit 1
     fi
     info "Node.js $(node --version)"
+
+    docker_stack_up
+    echo ""
 
     if [ ! -d "$FRONTEND/node_modules/vite" ]; then
         info "node_modules not found -- running npm install..."
@@ -154,6 +226,9 @@ cmd_stop() {
     else
         ok "All stopped"
     fi
+
+    echo ""
+    docker_stack_down
 }
 
 # ── RESTART ────────────────────────────────────────────────────
