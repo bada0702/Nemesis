@@ -227,7 +227,7 @@ export default function KnowledgeSettings() {
                   </button>
                 </div>
               </div>
-              {!valid.ok && (
+              {!valid.valid && (
                 <div className="mb-2 px-3 py-1.5 rounded bg-amber-900/40 text-amber-300 text-[11px]">
                   RDF 검증 실패: {valid.error}
                 </div>
