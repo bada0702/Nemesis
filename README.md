@@ -9,24 +9,7 @@
 
 ---
 
-## 빠른 시작 (두 가지 경로)
-
-### A) UI 개발/데모 — 백엔드/Docker 없이 (가장 빠름)
-
-실 Spring 백엔드 대신 `mock-api.js`(시드 데이터를 주는 목 API)를 띄워 프론트만 본다. Node.js만 있으면 된다.
-
-```bash
-./nemesis.sh start      # mock-api(:18080) + vite(:5173) 기동
-./nemesis.sh status     # 상태 확인
-./nemesis.sh logs       # 로그 tail
-./nemesis.sh stop       # 종료
-```
-
-기동 후 → **http://localhost:5173** (기본 로그인 `admin` / `admin`)
-
-> ⚠️ **목 API는 실 백엔드와 계약이 다르다.** cluster id가 숫자(`1,2,3`)이고 입력 검증이 느슨하며 에러 형식이 단순하다. 실 백엔드는 UUID id·엄격한 검증·RBAC를 쓴다. **출시 전 반드시 아래 B 경로(실 백엔드)로 e2e 검증할 것.**
-
-### B) 풀스택 — 실 백엔드 + PostgreSQL (프로덕션/통합 검증)
+## 빠른 시작 — 풀스택 (실 백엔드 + PostgreSQL)
 
 Docker와 Docker Compose가 필요하다.
 
